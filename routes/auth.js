@@ -11,7 +11,7 @@ const router = express.Router();
 router.post('/login', async (req, res) => {
   try {
     console.log('Login request received:', { email: req.body.email });
-    
+
     const { email, senha } = req.body;
 
     if (!email || !senha) {
@@ -38,7 +38,8 @@ router.post('/login', async (req, res) => {
 
     const user = result.rows[0];
 
-    // Verificar senha (comparação direta por enquanto)
+    // Verificar senha com bcrypt, DENTRO da função async
+    const senhaCorreta = await bcrypt.compare(senha, user.senha);
     if (!senhaCorreta) {
       return res.status(401).json({
         success: false,
@@ -70,35 +71,6 @@ router.post('/login', async (req, res) => {
 
   } catch (error) {
     console.error('Erro no login:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Erro interno do servidor'
-    });
-  }
-});
-
-// Verificar token
-router.get('/verify', auth, async (req, res) => {
-  try {
-    const result = await pool.query(
-      'SELECT id, email, permissao FROM usuarios WHERE id = $1',
-      [req.user.userId]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(401).json({
-        success: false,
-        message: 'Usuário não encontrado'
-      });
-    }
-
-    res.json({
-      success: true,
-      user: result.rows[0]
-    });
-
-  } catch (error) {
-    console.error('Erro na verificação:', error);
     res.status(500).json({
       success: false,
       message: 'Erro interno do servidor'
