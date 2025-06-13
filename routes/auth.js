@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const pool = require('../config/database');
 const auth = require('../middleware/auth');
+const senhaCorreta = await bcrypt.compare(senha, user.senha);
 
 const router = express.Router();
 
@@ -38,7 +39,7 @@ router.post('/login', async (req, res) => {
     const user = result.rows[0];
 
     // Verificar senha (comparação direta por enquanto)
-    if (senha !== user.senha) {
+    if (!senhaCorreta) {
       return res.status(401).json({
         success: false,
         message: 'Credenciais inválidas'
