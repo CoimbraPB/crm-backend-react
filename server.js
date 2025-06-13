@@ -12,7 +12,7 @@ app.use(cors());
 app.use(express.json());
 
 // Routes
-app.use('/auth', require('./routes/auth'));
+app.use('/auth', require('./src/routes/auth'));
 
 // Health check
 app.get('/health', (req, res) => {
