@@ -9,6 +9,8 @@ const router = express.Router();
 // Login
 router.post('/login', async (req, res) => {
   try {
+    console.log('Login request received:', { email: req.body.email });
+    
     const { email, senha } = req.body;
 
     if (!email || !senha) {
@@ -24,6 +26,8 @@ router.post('/login', async (req, res) => {
       [email]
     );
 
+    console.log('Database query result:', result.rows.length);
+
     if (result.rows.length === 0) {
       return res.status(401).json({
         success: false,
@@ -33,8 +37,7 @@ router.post('/login', async (req, res) => {
 
     const user = result.rows[0];
 
-    // Verificar senha (assumindo que você vai hash as senhas depois)
-    // Por enquanto, comparação direta
+    // Verificar senha (comparação direta por enquanto)
     if (senha !== user.senha) {
       return res.status(401).json({
         success: false,
@@ -55,6 +58,8 @@ router.post('/login', async (req, res) => {
 
     // Remover senha da resposta
     const { senha: _, ...userWithoutPassword } = user;
+
+    console.log('Login successful for user:', user.email);
 
     res.json({
       success: true,

@@ -8,17 +8,34 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: ['http://localhost:5173', 'https://crm-react-qxw3.onrender.com'],
+  credentials: true
+}));
 app.use(express.json());
 
 // Routes
-app.use('/auth', require('./src/routes/auth'));
+app.use('/auth', require('./routes/auth'));
 
 // Health check
 app.get('/health', (req, res) => {
-  res.json({ status: 'OK', message: 'Server is running' });
+  res.json({ 
+    status: 'OK', 
+    message: 'CRM Backend is running',
+    timestamp: new Date().toISOString()
+  });
 });
 
-app.listen(PORT, () => {
+// Root endpoint
+app.get('/', (req, res) => {
+  res.json({ 
+    message: 'CRM Backend API',
+    version: '1.0.0',
+    endpoints: ['/auth/login', '/auth/verify', '/health']
+  });
+});
+
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
+  console.log(`Environment: ${process.env.NODE_ENV}`);
 });
