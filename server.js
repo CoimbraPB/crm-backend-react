@@ -16,7 +16,8 @@ app.use(express.json());
 
 // Routes
 app.use('/auth', require('./routes/auth'));
-app.use('/clients', require('./routes/clientes')); // Atualizado
+app.use('/clients', require('./routes/clientes'));
+app.use('/crm-occurrences', require('./routes/crm-ocorrencias')); // Adicionado
 
 // Health check
 app.get('/health', (req, res) => {
@@ -32,7 +33,7 @@ app.get('/', (req, res) => {
   res.json({ 
     message: 'CRM Backend API',
     version: '1.0.0',
-    endpoints: ['/auth/login', '/auth/verify', '/clients', '/health']
+    endpoints: ['/auth/login', '/auth/verify', '/clients', '/crm-occurrences', '/health'] // Atualizado
   });
 });
 
