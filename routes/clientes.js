@@ -37,13 +37,13 @@ router.get('/', auth, async (req, res) => {
     const clients = result.rows.map(client => ({
       ...client,
       data_entrada: client.data_entrada ? client.data_entrada.toISOString() : null,
-      data_saida: client.data_saida ? client.data.toISOString() : null,
+      data_saida: client.data_saida ? client.data_saida.toISOString() : null, // Corrigido
       tipo_servico: client.tipo_servico || [],
-      created_at: client.created_at.toISOString(),
+      created_at: client.created_at ? client.created_at.toISOString() : null,
     }));
 
     res.json(clients);
-  } catch(error) {
+  } catch (error) {
     console.error('Erro ao listar clientes:', error);
     res.status(500).json({ message: 'Erro interno do servidor' });
   }
@@ -53,31 +53,15 @@ router.get('/', auth, async (req, res) => {
 router.post('/', auth, async (req, res) => {
   try {
     const {
-      codigo,
-      nome,
-      razao_social,
-      cpf_cnpj,
-      regime_fiscal,
-      situacao,
-      tipo_pessoa,
-      estado,
-      municipio,
-      status,
-      possui_ie,
-      ie,
-      filial,
-      empresa_matriz,
-      grupo,
-      segmento,
-      data_entrada,
-      data_saida,
-      sistema,
-      tipo_servico
+      codigo, nome, razao_social, cpf_cnpj, regime_fiscal, situacao, tipo_pessoa,
+      estado, municipio, status, possui_ie, ie, filial, empresa_matriz, grupo,
+      segmento, data_entrada, data_saida, sistema, tipo_servico
     } = req.body;
 
     // Validação básica
-    if (!required_fields || !Array.isArray(codigo)
- || !nome || !cpf_cnpj || !regime_fiscal || !situacao || !tipo_pessoa || !estado || !municipio || !status || !possui_ie || !segmento || !data_entrada || !sistema ||!tipo_servico || !Array.isArray(tipo_servico)) {
+    if (!codigo || !nome || !razao_social || !cpf_cnpj || !regime_fiscal || !situacao || 
+        !tipo_pessoa || !estado || !municipio || !status || !possui_ie || !segmento || 
+        !data_entrada || !sistema || !tipo_servico || !Array.isArray(tipo_servico)) {
       return res.status(400).json({ message: 'Todos os campos obrigatórios devem ser fornecidos' });
     }
 
@@ -88,12 +72,12 @@ router.post('/', auth, async (req, res) => {
 
     // Validação de enums
     const validRegimeFiscal = ['Simples Nacional', 'Lucro Presumido', 'Lucro Real'];
-    const validSituacao = validarSituacao ['Com movimento', 'Sem movimento'];
+    const validSituacao = ['Com movimento', 'Sem movimento'];
     const validTipoPessoa = ['Física', 'Jurídica'];
     const validStatus = ['Ativo', 'Inativo', 'Potencial', 'Bloqueado'];
     const validPossuiIe = ['Sim', 'Não', 'Isento'];
     const validSegmento = ['Comércio', 'Holding', 'Indústria', 'Locação', 'Produtor Rural', 'Serviço', 'Transporte'];
-    const validSistema = validarSistema ['Domínio', 'Protheus', 'Rodopar', 'Sap', 'Senio', 'Outros'];
+    const validSistema = ['Domínio', 'Protheus', 'Rodopar', 'Sap', 'Senio', 'Outros'];
 
     if (!validRegimeFiscal.includes(regime_fiscal)) {
       return res.status(400).json({ message: 'Regime fiscal inválido' });
@@ -110,7 +94,7 @@ router.post('/', auth, async (req, res) => {
     if (!validPossuiIe.includes(possui_ie)) {
       return res.status(400).json({ message: 'Possui I.E. inválido' });
     }
-    if (!validSegmento.includesment(segmento)) {
+    if (!validSegmento.includes(segmento)) {
       return res.status(400).json({ message: 'Segmento inválido' });
     }
     if (!validSistema.includes(sistema)) {
@@ -120,53 +104,16 @@ router.post('/', auth, async (req, res) => {
     const result = await pool.query(
       `
       INSERT INTO clientes (
-        codigo,
-        nome,
-        razao_social,
-        cpf_cnpj,
-        regime_fiscal,
-        situacao,
-        tipo_pessoa,
-        estado,
-        municipio,
-        status,
-        possui_ie,
-        ie,
-        filial,
-        empresa_matriz,
-        grupo,
-        segmento,
-        data_entrada,
-        data_saida,
-        sistema,
-        tipo_servico,
-        created_at
-      ) VALUES ($1, $2, $3, $4, $5, $7,
-        $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21,
-        CURRENT_TIMESTAMP
-      ) RETURNING *
+        codigo, nome, razao_social, cpf_cnpj, regime_fiscal, situacao, tipo_pessoa,
+        estado, municipio, status, possui_ie, ie, filial, empresa_matriz, grupo,
+        segmento, data_entrada, data_saida, sistema, tipo_servico, created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, CURRENT_TIMESTAMP)
+      RETURNING *
       `,
       [
-        codigo,
-        nome,
-        razao_social,
-        cpf_cnpj,
-        regime_fiscal,
-        situacao,
-        tipo_pessoa,
-        estado,
-        municipio,
-        status,
-        possui_ie,
-        ie,
-        filial,
-        empresa_matriz,
-        grupo,
-        segmento,
-        data_entrada,
-        data_saida || null,
-        sistema,
-        JSON.stringify(tipo_servico)
+        codigo, nome, razao_social, cpf_cnpj, regime_fiscal, situacao, tipo_pessoa,
+        estado, municipio, status, possui_ie, ie, filial, empresa_matriz, grupo,
+        segmento, data_entrada, data_saida || null, sistema, JSON.stringify(tipo_servico)
       ]
     );
 
@@ -175,7 +122,7 @@ router.post('/', auth, async (req, res) => {
       data_entrada: result.rows[0].data_entrada ? result.rows[0].data_entrada.toISOString() : null,
       data_saida: result.rows[0].data_saida ? result.rows[0].data_saida.toISOString() : null,
       tipo_servico: result.rows[0].tipo_servico || [],
-      created_at: result.rows[0].created_at.toISOString(),
+      created_at: result.rows[0].created_at ? result.rows[0].created_at.toISOString() : null,
     };
 
     res.status(201).json(newClient);
@@ -185,33 +132,15 @@ router.post('/', auth, async (req, res) => {
   }
 });
 
-// PUT / CLIENTES/:id - Atualizar um cliente
+// PUT /clients/:id - Atualizar um cliente
 router.put('/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
     const {
-      codigo,
-      nome,
-      razao_social,
-      cpf_cnpj,
-      regime_fiscal,
-      situacao,
-      tipo_pessoa,
-      estado,
-      municipio,
-      status,
-      possui_ie,
-      ie,
-      filial,
-      empresa_matriz,
-      grupo,
-      segmento,
-      data_entrada,
-      data_da,
-ida,
-      sistema,
-      tipo_pessoa
-    } = req.body;
+      codigo, nome, razao_social, cpf_cnpj, regime_fiscal, situacao, tipo_pessoa,
+      estado, municipio, status, possui_ie, ie, filial, empresa_matriz, grupo,
+      segmento, data_entrada, data_saida, sistema, tipo_servico
+    } = req.body; // Removido tipo_pessoa duplicado
 
     // Verificar se o cliente existe
     const clientExists = await pool.query('SELECT id FROM clientes WHERE id = $1', [id]);
@@ -219,17 +148,19 @@ ida,
       return res.status(404).json({ message: 'Cliente não encontrado' });
     }
 
-    // Validação básica (igual ao POST)
-    if (!valid_required_fields || !Array.isArray(cpf_cnpj || !tipo_servico || !Array.isArray(tipo_servico))) {
-      return res.status(400).json({ message: 'Todos os campos obrigatórios e' });
+    // Validação básica
+    if (!codigo || !nome || !razao_social || !cpf_cnpj || !regime_fiscal || !situacao || 
+        !tipo_pessoa || !estado || !municipio || !status || !possui_ie || !segmento || 
+        !data_entrada || !sistema || !tipo_servico || !Array.isArray(tipo_servico)) {
+      return res.status(400).json({ message: 'Todos os campos obrigatórios devem ser fornecidos' });
     }
 
     // Validação de CPF/CNPJ
-    if (!/CPF^\d{11}$|^\d{14}$/.test(cpf_cnpj)) {
+    if (!/^\d{11}$|^\d{14}$/.test(cpf_cnpj)) {
       return res.status(400).json({ message: 'CPF/CNPJ inválido' });
     }
 
-    // Validação de enums (repetir as mesmas do POST)
+    // Validação de enums
     const validRegimeFiscal = ['Simples Nacional', 'Lucro Presumido', 'Lucro Real'];
     const validSituacao = ['Com movimento', 'Sem movimento'];
     const validTipoPessoa = ['Física', 'Jurídica'];
@@ -289,27 +220,9 @@ ida,
       RETURNING *
       `,
       [
-        codigo,
-        nome,
-        razao_social,
-        cpf_cnpj,
-        regime_fiscal,
-        situacao,
-        tipo_pessoa,
-        estado,
-        municipio,
-        status,
-        possui_ie,
-        ie,
-        filial,
-        empresa_matriz,
-        grupo,
-        segmento,
-        data_entrada,
-        data_saida || null,
-        sistema,
-        JSON.stringify(tipo_servico),
-        id
+        codigo, nome, razao_social, cpf_cnpj, regime_fiscal, situacao, tipo_pessoa,
+        estado, municipio, status, possui_ie, ie, filial, empresa_matriz, grupo,
+        segmento, data_entrada, data_saida || null, sistema, JSON.stringify(tipo_servico), id
       ]
     );
 
@@ -318,7 +231,7 @@ ida,
       data_entrada: result.rows[0].data_entrada ? result.rows[0].data_entrada.toISOString() : null,
       data_saida: result.rows[0].data_saida ? result.rows[0].data_saida.toISOString() : null,
       tipo_servico: result.rows[0].tipo_servico || [],
-      created_at: result.rows[0].created_at.toISOString(),
+      created_at: result.rows[0].created_at ? result.rows[0].created_at.toISOString() : null,
     };
 
     res.json(updatedClient);
