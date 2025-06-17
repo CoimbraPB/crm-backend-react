@@ -52,7 +52,7 @@ router.get('/', auth, async (req, res) => {
 
     res.json(occurrences);
   } catch (error) {
-    console.error('Erro ao listar ocorrências CRM:', error);
+    console.error('Erro ao listar ocorrências CRM:', error.message, error.stack);
     res.status(500).json({ message: 'Erro interno do servidor ao listar ocorrências' });
   }
 });
@@ -140,6 +140,15 @@ router.post('/', auth, async (req, res) => {
     res.status(201).json(newOccurrence);
   } catch (error) {
     console.error('Erro ao criar ocorrência CRM:', error.message, error.stack);
+    if (error.code === '23502') { // Violação de NOT NULL
+      return res.status(400).json({ message: `Campo obrigatório ausente: ${error.column}` });
+    }
+    if (error.code === '23503') { // Violação de chave estrangeira
+      return res.status(400).json({ message: 'Cliente inválido (chave estrangeira)' });
+    }
+    if (error.code === '23505') { // Violação de unicidade
+      return res.status(400).json({ message: 'ID duplicado na ocorrência' });
+    }
     res.status(500).json({ message: `Erro interno do servidor ao criar ocorrência: ${error.message}` });
   }
 });
@@ -240,6 +249,12 @@ router.put('/:id', auth, async (req, res) => {
     res.json(updatedOccurrence);
   } catch (error) {
     console.error('Erro ao atualizar ocorrência CRM:', error.message, error.stack);
+    if (error.code === '23502') {
+      return res.status(400).json({ message: `Campo obrigatório ausente: ${error.column}` });
+    }
+    if (error.code === '23503') {
+      return res.status(400).json({ message: 'Cliente inválido (chave estrangeira)' });
+    }
     res.status(500).json({ message: `Erro interno do servidor ao atualizar ocorrência: ${error.message}` });
   }
 });
