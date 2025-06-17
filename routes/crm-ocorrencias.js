@@ -6,7 +6,7 @@ const router = express.Router();
 
 // Função auxiliar para validar formato de data (YYYY-MM-DD)
 const isValidDate = (dateString) => {
-  if (!dateString) return true;
+  if (!dateString) return true; // Permite nulo
   const regex = /^\d{4}-\d{2}-\d{2}$/;
   if (!regex.test(dateString)) return false;
   const date = new Date(dateString);
@@ -15,11 +15,10 @@ const isValidDate = (dateString) => {
 
 // Função auxiliar para converter YYYY-MM-DD para DD-MM-YYYY
 const toResponseDate = (date) => {
-  if (!date) return null;
-  const d = new Date(date);
-  const day = String(d.getDate()).padStart(2, '0');
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const year = d.getFullYear();
+  if (!date || !(date instanceof Date) || isNaN(date)) return null;
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
   return `${day}-${month}-${year}`;
 };
 
