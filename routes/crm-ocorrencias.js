@@ -4,6 +4,33 @@ const auth = require('../middleware/auth');
 
 const router = express.Router();
 
+// Função auxiliar para validar formato de data (DD-MM-YYYY)
+const isValidDate = (dateString) => {
+  if (!dateString) return true; // Permite nulo para campos opcionais
+  const regex = /^\d{2}-\d{2}-\d{4}$/;
+  if (!regex.test(dateString)) return false;
+  const [day, month, year] = dateString.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  return date.getDate() === day && date.getMonth() === month - 1 && date.getFullYear() === year;
+};
+
+// Função auxiliar para converter DD-MM-YYYY para YYYY-MM-DD (formato do banco)
+const toDatabaseDate = (dateString) => {
+  if (!dateString) return null;
+  const [day, month, year] = dateString.split('-');
+  return `${year}-${month}-${day}`;
+};
+
+// Função auxiliar para converter YYYY-MM-DD para DD-MM-YYYY (formato de resposta)
+const toResponseDate = (date) => {
+  if (!date) return null;
+  const d = new Date(date);
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  return `${day}-${month}-${year}`;
+};
+
 // GET /crm-occurrences - Listar todas as ocorrências CRM
 router.get('/', auth, async (req, res) => {
   try {
@@ -26,9 +53,9 @@ router.get('/', auth, async (req, res) => {
 
     const occurrences = result.rows.map(occurrence => ({
       ...occurrence,
-      data_registro: occurrence.data_registro ? occurrence.data_registro.toISOString().split('T')[0] : null,
-      data_resolucao: occurrence.data_resolucao ? occurrence.data_resolucao.toISOString().split('T')[0] : null,
-      created_at: occurrence.created_at ? occurrence.created_at.toISOString() : null,
+      data_registro: toResponseDate(occurrence.data_registro),
+      data_resolucao: toResponseDate(occurrence.data_resolucao),
+      created_at: occurrence.created_at ? new Date(occurrence.created_at).toISOString() : null,
     }));
 
     res.json(occurrences);
@@ -53,10 +80,27 @@ router.post('/', auth, async (req, res) => {
       feedback_cliente
     } = req.body;
 
-    // Validação básica
+    // Validação dos campos obrigatórios
     if (!data_registro || !cliente_id || !titulo_descricao || !descricao_apontamento ||
         !responsavel_interno || !acao_tomada || !acompanhamento_erica_operacional) {
       return res.status(400).json({ message: 'Todos os campos obrigatórios devem ser fornecidos' });
+    }
+
+    // Validação de tipos e formatos
+    if (!isValidDate(data_registro)) {
+      return res.status(400).json({ message: 'Formato de data_registro inválido (use DD-MM-YYYY)' });
+    }
+    if (data_resolucao && !isValidDate(data_resolucao)) {
+      return res.status(400).json({ message: 'Formato de data_resolucao inválido (use DD-MM-YYYY)' });
+    }
+    if (!Number.isInteger(Number(cliente_id)) || Number(cliente_id) <= 0) {
+      return res.status(400).json({ message: 'cliente_id deve ser um número inteiro positivo' });
+    }
+    if (titulo_descricao.length > 255) {
+      return res.status(400).json({ message: 'titulo_descricao deve ter no máximo 255 caracteres' });
+    }
+    if (responsavel_interno.length > 100) {
+      return res.status(400).json({ message: 'responsavel_interno deve ter no máximo 100 caracteres' });
     }
 
     // Verificar se o cliente existe
@@ -82,23 +126,23 @@ router.post('/', auth, async (req, res) => {
       RETURNING *
       `,
       [
-        data_registro,
+        toDatabaseDate(data_registro),
         cliente_id,
         titulo_descricao,
         descricao_apontamento,
         responsavel_interno,
         acao_tomada,
         acompanhamento_erica_operacional,
-        data_resolucao || null,
+        toDatabaseDate(data_resolucao),
         feedback_cliente || null
       ]
     );
 
     const newOccurrence = {
       ...result.rows[0],
-      data_registro: result.rows[0].data_registro ? result.rows[0].data_registro.toISOString().split('T')[0] : null,
-      data_resolucao: result.rows[0].data_resolucao ? result.rows[0].data_resolucao.toISOString().split('T')[0] : null,
-      created_at: result.rows[0].created_at ? result.rows[0].created_at.toISOString() : null,
+      data_registro: toResponseDate(result.rows[0].data_registro),
+      data_resolucao: toResponseDate(result.rows[0].data_resolucao),
+      created_at: result.rows[0].created_at ? new Date(result.rows[0].created_at).toISOString() : null,
     };
 
     res.status(201).json(newOccurrence);
@@ -124,6 +168,33 @@ router.put('/:id', auth, async (req, res) => {
       feedback_cliente
     } = req.body;
 
+    // Validação dos campos obrigatórios
+    if (!data_registro || !cliente_id || !titulo_descricao || !descricao_apontamento ||
+        !responsavel_interno || !acao_tomada || !acompanhamento_erica_operacional) {
+      return res.status(400).json({ message: 'Todos os campos obrigatórios devem ser fornecidos' });
+    }
+
+    if (!Number.isInteger(Number(id)) || Number(id) <= 0) {
+      return res.status(400).json({ message: 'ID da ocorrência deve ser um número inteiro positivo' });
+    }
+
+    // Validação de tipos e formatos
+    if (!isValidDate(data_registro)) {
+      return res.status(400).json({ message: 'Formato de data_registro inválido (use DD-MM-YYYY)' });
+    }
+    if (data_resolucao && !isValidDate(data_resolucao)) {
+      return res.status(400).json({ message: 'Formato de data_resolucao inválido (use DD-MM-YYYY)' });
+    }
+    if (!Number.isInteger(Number(cliente_id)) || Number(cliente_id) <= 0) {
+      return res.status(400).json({ message: 'cliente_id deve ser um número inteiro positivo' });
+    }
+    if (titulo_descricao.length > 255) {
+      return res.status(400).json({ message: 'titulo_descricao deve ter no máximo 255 caracteres' });
+    }
+    if (responsavel_interno.length > 100) {
+      return res.status(400).json({ message: 'responsavel_interno deve ter no máximo 100 caracteres' });
+    }
+
     // Verificar se a ocorrência existe
     const occurrenceExists = await pool.query('SELECT id FROM ocorrencias_crm WHERE id = $1', [id]);
     if (occurrenceExists.rows.length === 0) {
@@ -134,12 +205,6 @@ router.put('/:id', auth, async (req, res) => {
     const clientExists = await pool.query('SELECT id FROM clientes WHERE id = $1', [cliente_id]);
     if (clientExists.rows.length === 0) {
       return res.status(400).json({ message: 'Cliente inválido' });
-    }
-
-    // Validação básica
-    if (!data_registro || !cliente_id || !titulo_descricao || !descricao_apontamento ||
-        !responsavel_interno || !acao_tomada || !acompanhamento_erica_operacional) {
-      return res.status(400).json({ message: 'Todos os campos obrigatórios devem ser fornecidos' });
     }
 
     const result = await pool.query(
@@ -160,14 +225,14 @@ router.put('/:id', auth, async (req, res) => {
       RETURNING *
       `,
       [
-        data_registro,
+        toDatabaseDate(data_registro),
         cliente_id,
         titulo_descricao,
         descricao_apontamento,
         responsavel_interno,
         acao_tomada,
         acompanhamento_erica_operacional,
-        data_resolucao || null,
+        toDatabaseDate(data_resolucao),
         feedback_cliente || null,
         id
       ]
@@ -175,9 +240,9 @@ router.put('/:id', auth, async (req, res) => {
 
     const updatedOccurrence = {
       ...result.rows[0],
-      data_registro: result.rows[0].data_registro ? result.rows[0].data_registro.toISOString().split('T')[0] : null,
-      data_resolucao: result.rows[0].data_resolucao ? result.rows[0].data_resolucao.toISOString().split('T')[0] : null,
-      created_at: result.rows[0].created_at ? result.rows[0].created_at.toISOString() : null,
+      data_registro: toResponseDate(result.rows[0].data_registro),
+      data_resolucao: toResponseDate(result.rows[0].data_resolucao),
+      created_at: result.rows[0].created_at ? new Date(result.rows[0].created_at).toISOString() : null,
     };
 
     res.json(updatedOccurrence);
@@ -191,6 +256,10 @@ router.put('/:id', auth, async (req, res) => {
 router.delete('/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
+
+    if (!Number.isInteger(Number(id)) || Number(id) <= 0) {
+      return res.status(400).json({ message: 'ID da ocorrência deve ser um número inteiro positivo' });
+    }
 
     const result = await pool.query('DELETE FROM ocorrencias_crm WHERE id = $1 RETURNING id', [id]);
     if (result.rowCount === 0) {
