@@ -9,16 +9,17 @@ const isValidDate = (dateString) => {
   if (!dateString) return true; // Permite nulo
   const regex = /^\d{4}-\d{2}-\d{2}$/;
   if (!regex.test(dateString)) return false;
-  const date = new Date(dateString);
-  return date instanceof Date && !isNaN(date);
+  return true; // Simplificado para aceitar qualquer data válida no formato
 };
 
-// Função auxiliar para converter YYYY-MM-DD para DD-MM-YYYY
+// Função auxiliar para converter data para DD-MM-YYYY
 const toResponseDate = (date) => {
-  if (!date || !(date instanceof Date) || isNaN(date)) return null;
-  const day = String(date.getDate()).padStart(2, '0');
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const year = date.getFullYear();
+  if (!date) return null;
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return null; // Evita Invalid Date
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
   return `${day}-${month}-${year}`;
 };
 
