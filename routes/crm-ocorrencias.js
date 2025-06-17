@@ -6,14 +6,14 @@ const router = express.Router();
 
 // Função auxiliar para validar formato de data (YYYY-MM-DD)
 const isValidDate = (dateString) => {
-  if (!dateString) return true; // Permite nulo para campos opcionais
+  if (!dateString) return true;
   const regex = /^\d{4}-\d{2}-\d{2}$/;
   if (!regex.test(dateString)) return false;
   const date = new Date(dateString);
   return date instanceof Date && !isNaN(date);
 };
 
-// Função auxiliar para converter YYYY-MM-DD para DD-MM-YYYY (formato de resposta)
+// Função auxiliar para converter YYYY-MM-DD para DD-MM-YYYY
 const toResponseDate = (date) => {
   if (!date) return null;
   const d = new Date(date);
@@ -23,7 +23,7 @@ const toResponseDate = (date) => {
   return `${day}-${month}-${year}`;
 };
 
-// GET /crm-occurrences - Listar todas as ocorrências CRM
+// GET /crm-occurrences
 router.get('/', auth, async (req, res) => {
   try {
     const result = await pool.query(`
@@ -57,7 +57,7 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
-// POST /crm-occurrences - Criar uma nova ocorrência CRM
+// POST /crm-occurrences
 router.post('/', auth, async (req, res) => {
   try {
     const {
@@ -72,13 +72,11 @@ router.post('/', auth, async (req, res) => {
       feedback_cliente
     } = req.body;
 
-    // Validação dos campos obrigatórios
     if (!data_registro || !cliente_id || !titulo_descricao || !descricao_apontamento ||
         !responsavel_interno || !acao_tomada || !acompanhamento_erica_operacional) {
       return res.status(400).json({ message: 'Todos os campos obrigatórios devem ser fornecidos' });
     }
 
-    // Validação de tipos e formatos
     if (!isValidDate(data_registro)) {
       return res.status(400).json({ message: 'Formato de data_registro inválido (use YYYY-MM-DD)' });
     }
@@ -95,7 +93,6 @@ router.post('/', auth, async (req, res) => {
       return res.status(400).json({ message: 'responsavel_interno deve ter no máximo 100 caracteres' });
     }
 
-    // Verificar se o cliente existe
     const clientExists = await pool.query('SELECT id FROM clientes WHERE id = $1', [cliente_id]);
     if (clientExists.rows.length === 0) {
       return res.status(400).json({ message: 'Cliente inválido' });
@@ -140,20 +137,20 @@ router.post('/', auth, async (req, res) => {
     res.status(201).json(newOccurrence);
   } catch (error) {
     console.error('Erro ao criar ocorrência CRM:', error.message, error.stack);
-    if (error.code === '23502') { // Violação de NOT NULL
+    if (error.code === '23502') {
       return res.status(400).json({ message: `Campo obrigatório ausente: ${error.column}` });
     }
-    if (error.code === '23503') { // Violação de chave estrangeira
+    if (error.code === '23503') {
       return res.status(400).json({ message: 'Cliente inválido (chave estrangeira)' });
     }
-    if (error.code === '23505') { // Violação de unicidade
+    if (error.code === '23505') {
       return res.status(400).json({ message: 'ID duplicado na ocorrência' });
     }
     res.status(500).json({ message: `Erro interno do servidor ao criar ocorrência: ${error.message}` });
   }
 });
 
-// PUT /crm-occurrences/:id - Atualizar uma ocorrência CRM
+// PUT /crm-occurrences/:id
 router.put('/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
@@ -169,18 +166,16 @@ router.put('/:id', auth, async (req, res) => {
       feedback_cliente
     } = req.body;
 
-    // Validação dos campos obrigatórios
-    if (!data_registro || !cliente_id || !titulo_descricao || !descricao_apontamento ||
+    if (!cliente_id || !titulo_descricao || !descricao_apontamento ||
         !responsavel_interno || !acao_tomada || !acompanhamento_erica_operacional) {
-      return res.status(400).json({ message: 'Todos os campos obrigatórios devem ser fornecidos' });
+      return res.status(400).json({ message: 'Campos obrigatórios (exceto data_registro) devem ser fornecidos' });
     }
 
     if (!Number.isInteger(Number(id)) || Number(id) <= 0) {
       return res.status(400).json({ message: 'ID da ocorrência deve ser um número inteiro positivo' });
     }
 
-    // Validação de tipos e formatos
-    if (!isValidDate(data_registro)) {
+    if (data_registro && !isValidDate(data_registro)) {
       return res.status(400).json({ message: 'Formato de data_registro inválido (use YYYY-MM-DD)' });
     }
     if (data_resolucao && !isValidDate(data_resolucao)) {
@@ -196,13 +191,13 @@ router.put('/:id', auth, async (req, res) => {
       return res.status(400).json({ message: 'responsavel_interno deve ter no máximo 100 caracteres' });
     }
 
-    // Verificar se a ocorrência existe
-    const occurrenceExists = await pool.query('SELECT id FROM ocorrencias_crm WHERE id = $1', [id]);
+    const occurrenceExists = await pool.query('SELECT * FROM ocorrencias_crm WHERE id = $1', [id]);
     if (occurrenceExists.rows.length === 0) {
       return res.status(404).json({ message: 'Ocorrência não encontrada' });
     }
 
-    // Verificar se o cliente existe
+    const existingDataRegistro = occurrenceExists.rows[0].data_registro;
+
     const clientExists = await pool.query('SELECT id FROM clientes WHERE id = $1', [cliente_id]);
     if (clientExists.rows.length === 0) {
       return res.status(400).json({ message: 'Cliente inválido' });
@@ -220,13 +215,12 @@ router.put('/:id', auth, async (req, res) => {
         acao_tomada = $6,
         acompanhamento_erica_operacional = $7,
         data_resolucao = $8,
-        feedback_cliente = $9,
-        updated_at = CURRENT_TIMESTAMP
+        feedback_cliente = $9
       WHERE id = $10
       RETURNING *
       `,
       [
-        data_registro,
+        data_registro || existingDataRegistro,
         cliente_id,
         titulo_descricao,
         descricao_apontamento,
@@ -255,11 +249,14 @@ router.put('/:id', auth, async (req, res) => {
     if (error.code === '23503') {
       return res.status(400).json({ message: 'Cliente inválido (chave estrangeira)' });
     }
+    if (error.code === '22P02') {
+      return res.status(400).json({ message: 'Formato de dado inválido (verifique datas ou números)' });
+    }
     res.status(500).json({ message: `Erro interno do servidor ao atualizar ocorrência: ${error.message}` });
   }
 });
 
-// DELETE /crm-occurrences/:id - Deletar uma ocorrência CRM
+// DELETE /crm-occurrences/:id
 router.delete('/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
