@@ -4,21 +4,13 @@ const auth = require('../middleware/auth');
 
 const router = express.Router();
 
-// Função auxiliar para validar formato de data (DD-MM-YYYY)
+// Função auxiliar para validar formato de data (YYYY-MM-DD)
 const isValidDate = (dateString) => {
   if (!dateString) return true; // Permite nulo para campos opcionais
-  const regex = /^\d{2}-\d{2}-\d{4}$/;
+  const regex = /^\d{4}-\d{2}-\d{2}$/;
   if (!regex.test(dateString)) return false;
-  const [day, month, year] = dateString.split('-').map(Number);
-  const date = new Date(year, month - 1, day);
-  return date.getDate() === day && date.getMonth() === month - 1 && date.getFullYear() === year;
-};
-
-// Função auxiliar para converter DD-MM-YYYY para YYYY-MM-DD (formato do banco)
-const toDatabaseDate = (dateString) => {
-  if (!dateString) return null;
-  const [day, month, year] = dateString.split('-');
-  return `${year}-${month}-${day}`;
+  const date = new Date(dateString);
+  return date instanceof Date && !isNaN(date);
 };
 
 // Função auxiliar para converter YYYY-MM-DD para DD-MM-YYYY (formato de resposta)
@@ -61,7 +53,7 @@ router.get('/', auth, async (req, res) => {
     res.json(occurrences);
   } catch (error) {
     console.error('Erro ao listar ocorrências CRM:', error);
-    res.status(500).json({ message: 'Erro interno do servidor' });
+    res.status(500).json({ message: 'Erro interno do servidor ao listar ocorrências' });
   }
 });
 
@@ -88,10 +80,10 @@ router.post('/', auth, async (req, res) => {
 
     // Validação de tipos e formatos
     if (!isValidDate(data_registro)) {
-      return res.status(400).json({ message: 'Formato de data_registro inválido (use DD-MM-YYYY)' });
+      return res.status(400).json({ message: 'Formato de data_registro inválido (use YYYY-MM-DD)' });
     }
     if (data_resolucao && !isValidDate(data_resolucao)) {
-      return res.status(400).json({ message: 'Formato de data_resolucao inválido (use DD-MM-YYYY)' });
+      return res.status(400).json({ message: 'Formato de data_resolucao inválido (use YYYY-MM-DD)' });
     }
     if (!Number.isInteger(Number(cliente_id)) || Number(cliente_id) <= 0) {
       return res.status(400).json({ message: 'cliente_id deve ser um número inteiro positivo' });
@@ -126,14 +118,14 @@ router.post('/', auth, async (req, res) => {
       RETURNING *
       `,
       [
-        toDatabaseDate(data_registro),
+        data_registro,
         cliente_id,
         titulo_descricao,
         descricao_apontamento,
         responsavel_interno,
         acao_tomada,
         acompanhamento_erica_operacional,
-        toDatabaseDate(data_resolucao),
+        data_resolucao || null,
         feedback_cliente || null
       ]
     );
@@ -147,8 +139,8 @@ router.post('/', auth, async (req, res) => {
 
     res.status(201).json(newOccurrence);
   } catch (error) {
-    console.error('Erro ao criar ocorrência CRM:', error);
-    res.status(500).json({ message: 'Erro interno do servidor' });
+    console.error('Erro ao criar ocorrência CRM:', error.message, error.stack);
+    res.status(500).json({ message: `Erro interno do servidor ao criar ocorrência: ${error.message}` });
   }
 });
 
@@ -180,10 +172,10 @@ router.put('/:id', auth, async (req, res) => {
 
     // Validação de tipos e formatos
     if (!isValidDate(data_registro)) {
-      return res.status(400).json({ message: 'Formato de data_registro inválido (use DD-MM-YYYY)' });
+      return res.status(400).json({ message: 'Formato de data_registro inválido (use YYYY-MM-DD)' });
     }
     if (data_resolucao && !isValidDate(data_resolucao)) {
-      return res.status(400).json({ message: 'Formato de data_resolucao inválido (use DD-MM-YYYY)' });
+      return res.status(400).json({ message: 'Formato de data_resolucao inválido (use YYYY-MM-DD)' });
     }
     if (!Number.isInteger(Number(cliente_id)) || Number(cliente_id) <= 0) {
       return res.status(400).json({ message: 'cliente_id deve ser um número inteiro positivo' });
@@ -225,14 +217,14 @@ router.put('/:id', auth, async (req, res) => {
       RETURNING *
       `,
       [
-        toDatabaseDate(data_registro),
+        data_registro,
         cliente_id,
         titulo_descricao,
         descricao_apontamento,
         responsavel_interno,
         acao_tomada,
         acompanhamento_erica_operacional,
-        toDatabaseDate(data_resolucao),
+        data_resolucao || null,
         feedback_cliente || null,
         id
       ]
@@ -247,8 +239,8 @@ router.put('/:id', auth, async (req, res) => {
 
     res.json(updatedOccurrence);
   } catch (error) {
-    console.error('Erro ao atualizar ocorrência CRM:', error);
-    res.status(500).json({ message: 'Erro interno do servidor' });
+    console.error('Erro ao atualizar ocorrência CRM:', error.message, error.stack);
+    res.status(500).json({ message: `Erro interno do servidor ao atualizar ocorrência: ${error.message}` });
   }
 });
 
@@ -268,8 +260,8 @@ router.delete('/:id', auth, async (req, res) => {
 
     res.json(true);
   } catch (error) {
-    console.error('Erro ao deletar ocorrência CRM:', error);
-    res.status(500).json({ message: 'Erro interno do servidor' });
+    console.error('Erro ao deletar ocorrência CRM:', error.message, error.stack);
+    res.status(500).json({ message: `Erro interno do servidor ao deletar ocorrência: ${error.message}` });
   }
 });
 
