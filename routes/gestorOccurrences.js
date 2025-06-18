@@ -5,7 +5,11 @@ const authMiddleware = require('../middleware/auth');
 
 router.get('/', authMiddleware, async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM ocorrencias');
+    const result = await pool.query(`
+      SELECT o.*, c.nome, c.codigo
+      FROM ocorrencias o
+      LEFT JOIN clientes c ON o.cliente_id = c.id
+    `);
     res.json(result.rows);
   } catch (err) {
     console.error('Error fetching occurrences:', err.stack);
