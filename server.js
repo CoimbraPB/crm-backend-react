@@ -18,6 +18,7 @@ app.use(express.json());
 app.use('/auth', require('./routes/auth'));
 app.use('/clients', require('./routes/clientes'));
 app.use('/crm-occurrences', require('./routes/crm-ocorrencias')); // Adicionado
+app.use('/gestor-occurrences', require('./routes/gestorOccurrences')); // Adicionado
 
 // Health check
 app.get('/health', (req, res) => {
@@ -33,11 +34,12 @@ app.get('/', (req, res) => {
   res.json({ 
     message: 'CRM Backend API',
     version: '1.0.0',
-    endpoints: ['/auth/login', '/auth/verify', '/clients', '/crm-occurrences', '/health'] // Atualizado
+    endpoints: ['/auth/login', '/auth/verify', '/clients', '/crm-occurrences', '/gestor-occurrences', '/health'] // Atualizado
   });
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Server running on port ${PORT} at ${startTime}`);
   console.log(`Environment: ${process.env.NODE_ENV}`);
+  console.log('Available endpoints:', ['/auth/login', '/auth/verify', '/clients', '/crm-occurrences', '/gestor-occurrences', '/health']);
 });
