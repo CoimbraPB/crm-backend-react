@@ -39,7 +39,7 @@ app.get('/', (req, res) => {
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on port ${PORT} at ${startTime}`);
+  console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV}`);
   console.log('Available endpoints:', ['/auth/login', '/auth/verify', '/clients', '/crm-occurrences', '/gestor-occurrences', '/health']);
 });
