@@ -9,7 +9,7 @@ const PORT = process.env.PORT || 3001;
 
 // Middleware
 app.use(cors({
-  origin: ['http://localhost:5173', 'https://crm-react-qxw3.onrender.com'],
+  origin: ['http://localhost:5173', 'https://painelpb.onrender.com'],
   credentials: true
 }));
 app.use(express.json());
