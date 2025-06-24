@@ -1,6 +1,7 @@
 const express = require('express');
 const pool = require('../config/database');
 const auth = require('../middleware/auth');
+const { logAction, ACTION_TYPES, ENTITY_TYPES } = require('../services/auditLogService');
 
 const router = express.Router();
 
@@ -106,14 +107,15 @@ router.post('/', auth, async (req, res) => {
       INSERT INTO clientes (
         codigo, nome, razao_social, cpf_cnpj, regime_fiscal, situacao, tipo_pessoa,
         estado, municipio, status, possui_ie, ie, filial, empresa_matriz, grupo,
-        segmento, data_entrada, data_saida, sistema, tipo_servico, created_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, CURRENT_TIMESTAMP)
+      segmento, data_entrada, data_saida, sistema, tipo_servico, created_at, created_by_user_id, updated_by_user_id
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, CURRENT_TIMESTAMP, $21, $21)
       RETURNING *
       `,
       [
         codigo, nome, razao_social, cpf_cnpj, regime_fiscal, situacao, tipo_pessoa,
         estado, municipio, status, possui_ie, ie, filial, empresa_matriz, grupo,
-        segmento, data_entrada, data_saida || null, sistema, JSON.stringify(tipo_servico)
+      segmento, data_entrada, data_saida || null, sistema, JSON.stringify(tipo_servico),
+      req.user.userId // For created_by_user_id and updated_by_user_id
       ]
     );
 
@@ -125,9 +127,27 @@ router.post('/', auth, async (req, res) => {
       created_at: result.rows[0].created_at ? result.rows[0].created_at.toISOString() : null,
     };
 
+    // Audit log
+    await logAction(
+      req.user.userId,
+      req.user.email,
+      ACTION_TYPES.CLIENT_CREATED,
+      ENTITY_TYPES.CLIENT,
+      newClient.id,
+    { clientData: { ...newClient, created_by_user_id: req.user.userId, updated_by_user_id: req.user.userId } }
+    );
+
     res.status(201).json(newClient);
   } catch (error) {
     console.error('Erro ao criar cliente:', error);
+    await logAction(
+      req.user?.userId,
+      req.user?.email,
+      ACTION_TYPES.SYSTEM_ERROR,
+      ENTITY_TYPES.CLIENT,
+      null,
+      { error: error.message, details: 'Failed to create client', requestBody: req.body }
+    );
     res.status(500).json({ message: 'Erro interno do servidor' });
   }
 });
@@ -143,10 +163,11 @@ router.put('/:id', auth, async (req, res) => {
     } = req.body; // Removido tipo_pessoa duplicado
 
     // Verificar se o cliente existe
-    const clientExists = await pool.query('SELECT id FROM clientes WHERE id = $1', [id]);
-    if (clientExists.rows.length === 0) {
+    const clientExistsResult = await pool.query('SELECT * FROM clientes WHERE id = $1', [id]);
+    if (clientExistsResult.rows.length === 0) {
       return res.status(404).json({ message: 'Cliente não encontrado' });
     }
+    const oldClientData = clientExistsResult.rows[0];
 
     // Validação básica
     if (!codigo || !nome || !razao_social || !cpf_cnpj || !regime_fiscal || !situacao || 
@@ -215,14 +236,16 @@ router.put('/:id', auth, async (req, res) => {
         data_saida = $18, 
         sistema = $19, 
         tipo_servico = $20,
-        updated_at = CURRENT_TIMESTAMP
+        updated_at = CURRENT_TIMESTAMP,
+        updated_by_user_id = $22
       WHERE id = $21
       RETURNING *
       `,
       [
         codigo, nome, razao_social, cpf_cnpj, regime_fiscal, situacao, tipo_pessoa,
         estado, municipio, status, possui_ie, ie, filial, empresa_matriz, grupo,
-        segmento, data_entrada, data_saida || null, sistema, JSON.stringify(tipo_servico), id
+        segmento, data_entrada, data_saida || null, sistema, JSON.stringify(tipo_servico), 
+        id, req.user.userId // For updated_by_user_id
       ]
     );
 
@@ -234,9 +257,27 @@ router.put('/:id', auth, async (req, res) => {
       created_at: result.rows[0].created_at ? result.rows[0].created_at.toISOString() : null,
     };
 
+    // Audit log
+    await logAction(
+      req.user.userId,
+      req.user.email,
+      ACTION_TYPES.CLIENT_UPDATED,
+      ENTITY_TYPES.CLIENT,
+      updatedClient.id,
+      { oldData: oldClientData, newData: { ...updatedClient, updated_by_user_id: req.user.userId } }
+    );
+
     res.json(updatedClient);
   } catch (error) {
     console.error('Erro ao atualizar cliente:', error);
+    await logAction(
+      req.user?.userId,
+      req.user?.email,
+      ACTION_TYPES.SYSTEM_ERROR,
+      ENTITY_TYPES.CLIENT,
+      req.params.id,
+      { error: error.message, details: 'Failed to update client', requestBody: req.body }
+    );
     res.status(500).json({ message: 'Erro interno do servidor' });
   }
 });
@@ -246,14 +287,37 @@ router.delete('/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
 
-    const result = await pool.query('DELETE FROM clientes WHERE id = $1 RETURNING id', [id]);
-    if (result.rowCount === 0) {
+    // Fetch client data before deleting for logging purposes
+    const clientToDeleteResult = await pool.query('SELECT * FROM clientes WHERE id = $1', [id]);
+    if (clientToDeleteResult.rows.length === 0) {
       return res.status(404).json({ message: 'Cliente não encontrado' });
     }
+    const clientToDeleteData = clientToDeleteResult.rows[0];
+
+    const result = await pool.query('DELETE FROM clientes WHERE id = $1 RETURNING id', [id]);
+    // No need to check result.rowCount again as we've already confirmed existence
+
+    // Audit log
+    await logAction(
+      req.user.userId,
+      req.user.email,
+      ACTION_TYPES.CLIENT_DELETED,
+      ENTITY_TYPES.CLIENT,
+      id, // The ID of the deleted client
+      { deletedData: clientToDeleteData } // Log the data of the client that was deleted
+    );
 
     res.json(true);
   } catch (error) {
     console.error('Erro ao deletar cliente:', error);
+    await logAction(
+      req.user?.userId,
+      req.user?.email,
+      ACTION_TYPES.SYSTEM_ERROR,
+      ENTITY_TYPES.CLIENT,
+      req.params.id,
+      { error: error.message, details: 'Failed to delete client' }
+    );
     res.status(500).json({ message: 'Erro interno do servidor' });
   }
 });

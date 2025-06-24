@@ -7,7 +7,7 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Middleware
+// Middleware Frontend
 app.use(cors({
   origin: ['http://localhost:5173', 'https://painelpb.onrender.com'],
   credentials: true
@@ -17,8 +17,10 @@ app.use(express.json());
 // Routes
 app.use('/auth', require('./routes/auth'));
 app.use('/clients', require('./routes/clientes'));
-app.use('/crm-occurrences', require('./routes/crm-ocorrencias')); // Adicionado
-app.use('/gestor-occurrences', require('./routes/gestorOccurrences')); // Adicionado
+app.use('/crm-occurrences', require('./routes/crm-ocorrencias'));
+app.use('/gestor-occurrences', require('./routes/gestorOccurrences'));
+app.use('/users', require('./routes/users'));
+app.use('/audit-logs', require('./routes/auditLogs')); // Novo endpoint de logs de auditoria
 
 // Health check
 app.get('/health', (req, res) => {
@@ -34,12 +36,12 @@ app.get('/', (req, res) => {
   res.json({ 
     message: 'CRM Backend API',
     version: '1.0.0',
-    endpoints: ['/auth/login', '/auth/verify', '/clients', '/crm-occurrences', '/gestor-occurrences', '/health'] // Atualizado
+    endpoints: ['/auth/login', '/auth/verify', '/clients', '/crm-occurrences', '/gestor-occurrences', '/users', '/audit-logs', '/health']
   });
 });
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV}`);
-  console.log('Available endpoints:', ['/auth/login', '/auth/verify', '/clients', '/crm-occurrences', '/gestor-occurrences', '/health']);
+  console.log('Available endpoints:', ['/auth/login', '/auth/verify', '/clients', '/crm-occurrences', '/gestor-occurrences', '/users', '/audit-logs', '/health']);
 });

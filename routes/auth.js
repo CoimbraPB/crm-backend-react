@@ -47,20 +47,25 @@ router.post('/login', async (req, res) => {
     }
 
     // Gerar token JWT
-    const token = jwt.sign(
-      { 
-        userId: user.id,
-        email: user.email,
-        permissao: user.permissao
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: '24h' }
-    );
+  const token = jwt.sign(
+    { 
+      userId: user.id,
+      email: user.email,
+      nome: user.nome, // <= adicionar aqui
+      permissao: user.permissao
+    },
+    process.env.JWT_SECRET,
+    { expiresIn: '24h' }
+  );
 
     // Remover senha da resposta
     const { senha: _, ...userWithoutPassword } = user;
 
     console.log('Login successful for user:', user.email);
+
+    // Audit log for successful login
+    const { logAction, ACTION_TYPES, ENTITY_TYPES } = require('../services/auditLogService');
+    await logAction(user.id, user.email, ACTION_TYPES.USER_LOGIN_SUCCESS, ENTITY_TYPES.USER, user.id);
 
     res.json({
       success: true,
@@ -70,6 +75,13 @@ router.post('/login', async (req, res) => {
 
   } catch (error) {
     console.error('Erro no login:', error);
+    // Optional: Log failed login attempt if you have user information at this stage
+    // For example, if email was valid but password was wrong.
+    // const { email } = req.body;
+    // if (email) {
+    //   const { logAction, ACTION_TYPES, ENTITY_TYPES } = require('../services/auditLogService');
+    //   await logAction(null, email, ACTION_TYPES.USER_LOGIN_FAILED, ENTITY_TYPES.USER, null, { error: 'Invalid credentials' });
+    // }
     res.status(500).json({
       success: false,
       message: 'Erro interno do servidor'
@@ -81,7 +93,7 @@ router.post('/login', async (req, res) => {
 router.get('/verify', auth, async (req, res) => {
   try {
     const result = await pool.query(
-      'SELECT id, email, permissao FROM usuarios WHERE id = $1',
+      'SELECT id, email, nome, permissao FROM usuarios WHERE id = $1',
       [req.user.userId]
     );
 

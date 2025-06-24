@@ -1,6 +1,7 @@
 const express = require('express');
 const pool = require('../config/database');
 const auth = require('../middleware/auth');
+const { logAction, ACTION_TYPES, ENTITY_TYPES } = require('../services/auditLogService');
 
 const router = express.Router();
 
@@ -110,8 +111,10 @@ router.post('/', auth, async (req, res) => {
         acompanhamento_erica_operacional,
         data_resolucao,
         feedback_cliente,
-        created_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP)
+        created_at,
+        created_by_user_id,
+        updated_by_user_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP, $10, $10)
       RETURNING *
       `,
       [
@@ -123,7 +126,8 @@ router.post('/', auth, async (req, res) => {
         acao_tomada,
         acompanhamento_erica_operacional,
         data_resolucao || null,
-        feedback_cliente || null
+        feedback_cliente || null,
+        req.user.userId // for created_by_user_id and updated_by_user_id
       ]
     );
 
@@ -134,9 +138,27 @@ router.post('/', auth, async (req, res) => {
       created_at: result.rows[0].created_at ? new Date(result.rows[0].created_at).toISOString() : null,
     };
 
+    // Audit log
+    await logAction(
+      req.user.userId,
+      req.user.email,
+      ACTION_TYPES.CRM_OCCURRENCE_CREATED,
+      ENTITY_TYPES.CRM_OCCURRENCE,
+      newOccurrence.id,
+      { occurrenceData: { ...newOccurrence, created_by_user_id: req.user.userId, updated_by_user_id: req.user.userId } }
+    );
+
     res.status(201).json(newOccurrence);
   } catch (error) {
     console.error('Erro ao criar ocorrência CRM:', error.message, error.stack);
+    await logAction(
+      req.user?.userId,
+      req.user?.email,
+      ACTION_TYPES.SYSTEM_ERROR,
+      ENTITY_TYPES.CRM_OCCURRENCE,
+      null,
+      { error: error.message, details: 'Failed to create CRM occurrence', requestBody: req.body }
+    );
     if (error.code === '23502') {
       return res.status(400).json({ message: `Campo obrigatório ausente: ${error.column}` });
     }
@@ -191,12 +213,13 @@ router.put('/:id', auth, async (req, res) => {
       return res.status(400).json({ message: 'responsavel_interno deve ter no máximo 100 caracteres' });
     }
 
-    const occurrenceExists = await pool.query('SELECT * FROM ocorrencias_crm WHERE id = $1', [id]);
-    if (occurrenceExists.rows.length === 0) {
+    const occurrenceExistsResult = await pool.query('SELECT * FROM ocorrencias_crm WHERE id = $1', [id]);
+    if (occurrenceExistsResult.rows.length === 0) {
       return res.status(404).json({ message: 'Ocorrência não encontrada' });
     }
+    const oldOccurrenceData = occurrenceExistsResult.rows[0];
+    const existingDataRegistro = oldOccurrenceData.data_registro;
 
-    const existingDataRegistro = occurrenceExists.rows[0].data_registro;
 
     const clientExists = await pool.query('SELECT id FROM clientes WHERE id = $1', [cliente_id]);
     if (clientExists.rows.length === 0) {
@@ -215,7 +238,8 @@ router.put('/:id', auth, async (req, res) => {
         acao_tomada = $6,
         acompanhamento_erica_operacional = $7,
         data_resolucao = $8,
-        feedback_cliente = $9
+        feedback_cliente = $9,
+        updated_by_user_id = $11 
       WHERE id = $10
       RETURNING *
       `,
@@ -229,7 +253,8 @@ router.put('/:id', auth, async (req, res) => {
         acompanhamento_erica_operacional,
         data_resolucao || null,
         feedback_cliente || null,
-        id
+        id,
+        req.user.userId // for updated_by_user_id
       ]
     );
 
@@ -240,9 +265,27 @@ router.put('/:id', auth, async (req, res) => {
       created_at: result.rows[0].created_at ? new Date(result.rows[0].created_at).toISOString() : null,
     };
 
+    // Audit log
+    await logAction(
+      req.user.userId,
+      req.user.email,
+      ACTION_TYPES.CRM_OCCURRENCE_UPDATED,
+      ENTITY_TYPES.CRM_OCCURRENCE,
+      updatedOccurrence.id,
+      { oldData: oldOccurrenceData, newData: { ...updatedOccurrence, updated_by_user_id: req.user.userId } }
+    );
+
     res.json(updatedOccurrence);
   } catch (error) {
     console.error('Erro ao atualizar ocorrência CRM:', error.message, error.stack);
+    await logAction(
+      req.user?.userId,
+      req.user?.email,
+      ACTION_TYPES.SYSTEM_ERROR,
+      ENTITY_TYPES.CRM_OCCURRENCE,
+      req.params.id,
+      { error: error.message, details: 'Failed to update CRM occurrence', requestBody: req.body }
+    );
     if (error.code === '23502') {
       return res.status(400).json({ message: `Campo obrigatório ausente: ${error.column}` });
     }
@@ -265,14 +308,35 @@ router.delete('/:id', auth, async (req, res) => {
       return res.status(400).json({ message: 'ID da ocorrência deve ser um número inteiro positivo' });
     }
 
-    const result = await pool.query('DELETE FROM ocorrencias_crm WHERE id = $1 RETURNING id', [id]);
-    if (result.rowCount === 0) {
+    const occurrenceToDeleteResult = await pool.query('SELECT * FROM ocorrencias_crm WHERE id = $1', [id]);
+    if (occurrenceToDeleteResult.rows.length === 0) {
       return res.status(404).json({ message: 'Ocorrência não encontrada' });
     }
+    const occurrenceToDeleteData = occurrenceToDeleteResult.rows[0];
+
+    await pool.query('DELETE FROM ocorrencias_crm WHERE id = $1', [id]);
+
+    // Audit log
+    await logAction(
+      req.user.userId,
+      req.user.email,
+      ACTION_TYPES.CRM_OCCURRENCE_DELETED,
+      ENTITY_TYPES.CRM_OCCURRENCE,
+      id,
+      { deletedData: occurrenceToDeleteData }
+    );
 
     res.json(true);
   } catch (error) {
     console.error('Erro ao deletar ocorrência CRM:', error.message, error.stack);
+    await logAction(
+      req.user?.userId,
+      req.user?.email,
+      ACTION_TYPES.SYSTEM_ERROR,
+      ENTITY_TYPES.CRM_OCCURRENCE,
+      req.params.id,
+      { error: error.message, details: 'Failed to delete CRM occurrence' }
+    );
     res.status(500).json({ message: `Erro interno do servidor ao deletar ocorrência: ${error.message}` });
   }
 });
