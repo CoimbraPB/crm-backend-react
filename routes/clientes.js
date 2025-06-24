@@ -78,7 +78,7 @@ router.post('/', auth, async (req, res) => {
     const validStatus = ['Ativo', 'Inativo', 'Potencial', 'Bloqueado'];
     const validPossuiIe = ['Sim', 'Não', 'Isento'];
     const validSegmento = ['Comércio', 'Holding', 'Indústria', 'Locação', 'Produtor Rural', 'Serviço', 'Transporte'];
-    const validSistema = ['Domínio', 'Protheus', 'Rodopar', 'Sap', 'Senio', 'Outros'];
+    const validSistema = ['Domínio', 'Protheus', 'Rodopar', 'Sap', 'Senior', 'Outros'];
 
     if (!validRegimeFiscal.includes(regime_fiscal)) {
       return res.status(400).json({ message: 'Regime fiscal inválido' });
@@ -188,7 +188,7 @@ router.put('/:id', auth, async (req, res) => {
     const validStatus = ['Ativo', 'Inativo', 'Potencial', 'Bloqueado'];
     const validPossuiIe = ['Sim', 'Não', 'Isento'];
     const validSegmento = ['Comércio', 'Holding', 'Indústria', 'Locação', 'Produtor Rural', 'Serviço', 'Transporte'];
-    const validSistema = ['Domínio', 'Protheus', 'Rodopar', 'Sap', 'Senio', 'Outros'];
+    const validSistema = ['Domínio', 'Protheus', 'Rodopar', 'Sap', 'Senior', 'Outros'];
 
     if (!validRegimeFiscal.includes(regime_fiscal)) {
       return res.status(400).json({ message: 'Regime fiscal inválido' });
