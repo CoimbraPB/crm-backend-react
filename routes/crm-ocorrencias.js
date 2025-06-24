@@ -39,6 +39,7 @@ router.get('/', auth, async (req, res) => {
         acompanhamento_erica_operacional,
         data_resolucao,
         feedback_cliente,
+        proxima_acao_data,
         created_at
       FROM ocorrencias_crm
       ORDER BY created_at DESC
@@ -48,6 +49,7 @@ router.get('/', auth, async (req, res) => {
       ...occurrence,
       data_registro: toResponseDate(occurrence.data_registro),
       data_resolucao: toResponseDate(occurrence.data_resolucao),
+      proxima_acao_data: toResponseDate(occurrence.proxima_acao_data),
       created_at: occurrence.created_at ? new Date(occurrence.created_at).toISOString() : null,
     }));
 
@@ -70,7 +72,8 @@ router.post('/', auth, async (req, res) => {
       acao_tomada,
       acompanhamento_erica_operacional,
       data_resolucao,
-      feedback_cliente
+      feedback_cliente,
+      proxima_acao_data
     } = req.body;
 
     if (!data_registro || !cliente_id || !titulo_descricao || !descricao_apontamento ||
@@ -83,6 +86,9 @@ router.post('/', auth, async (req, res) => {
     }
     if (data_resolucao && !isValidDate(data_resolucao)) {
       return res.status(400).json({ message: 'Formato de data_resolucao inválido (use YYYY-MM-DD)' });
+    }
+    if (proxima_acao_data && !isValidDate(proxima_acao_data)) {
+      return res.status(400).json({ message: 'Formato de proxima_acao_data inválido (use YYYY-MM-DD)' });
     }
     if (!Number.isInteger(Number(cliente_id)) || Number(cliente_id) <= 0) {
       return res.status(400).json({ message: 'cliente_id deve ser um número inteiro positivo' });
@@ -111,10 +117,11 @@ router.post('/', auth, async (req, res) => {
         acompanhamento_erica_operacional,
         data_resolucao,
         feedback_cliente,
+        proxima_acao_data,
         created_at,
         created_by_user_id,
         updated_by_user_id
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP, $10, $10)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP, $11, $11)
       RETURNING *
       `,
       [
@@ -127,6 +134,7 @@ router.post('/', auth, async (req, res) => {
         acompanhamento_erica_operacional,
         data_resolucao || null,
         feedback_cliente || null,
+        proxima_acao_data || null,
         req.user.userId // for created_by_user_id and updated_by_user_id
       ]
     );
@@ -135,6 +143,7 @@ router.post('/', auth, async (req, res) => {
       ...result.rows[0],
       data_registro: toResponseDate(result.rows[0].data_registro),
       data_resolucao: toResponseDate(result.rows[0].data_resolucao),
+      proxima_acao_data: toResponseDate(result.rows[0].proxima_acao_data),
       created_at: result.rows[0].created_at ? new Date(result.rows[0].created_at).toISOString() : null,
     };
 
@@ -185,7 +194,8 @@ router.put('/:id', auth, async (req, res) => {
       acao_tomada,
       acompanhamento_erica_operacional,
       data_resolucao,
-      feedback_cliente
+      feedback_cliente,
+      proxima_acao_data
     } = req.body;
 
     if (!cliente_id || !titulo_descricao || !descricao_apontamento ||
@@ -202,6 +212,9 @@ router.put('/:id', auth, async (req, res) => {
     }
     if (data_resolucao && !isValidDate(data_resolucao)) {
       return res.status(400).json({ message: 'Formato de data_resolucao inválido (use YYYY-MM-DD)' });
+    }
+    if (proxima_acao_data && !isValidDate(proxima_acao_data)) {
+      return res.status(400).json({ message: 'Formato de proxima_acao_data inválido (use YYYY-MM-DD)' });
     }
     if (!Number.isInteger(Number(cliente_id)) || Number(cliente_id) <= 0) {
       return res.status(400).json({ message: 'cliente_id deve ser um número inteiro positivo' });
@@ -239,8 +252,9 @@ router.put('/:id', auth, async (req, res) => {
         acompanhamento_erica_operacional = $7,
         data_resolucao = $8,
         feedback_cliente = $9,
-        updated_by_user_id = $11 
-      WHERE id = $10
+        proxima_acao_data = $10,
+        updated_by_user_id = $12
+      WHERE id = $11
       RETURNING *
       `,
       [
@@ -253,6 +267,7 @@ router.put('/:id', auth, async (req, res) => {
         acompanhamento_erica_operacional,
         data_resolucao || null,
         feedback_cliente || null,
+        proxima_acao_data || null,
         id,
         req.user.userId // for updated_by_user_id
       ]
@@ -262,6 +277,7 @@ router.put('/:id', auth, async (req, res) => {
       ...result.rows[0],
       data_registro: toResponseDate(result.rows[0].data_registro),
       data_resolucao: toResponseDate(result.rows[0].data_resolucao),
+      proxima_acao_data: toResponseDate(result.rows[0].proxima_acao_data),
       created_at: result.rows[0].created_at ? new Date(result.rows[0].created_at).toISOString() : null,
     };
 
