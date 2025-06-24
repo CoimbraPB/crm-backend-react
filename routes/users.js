@@ -105,10 +105,13 @@ router.get('/:id', auth, authorizeAdminOrDev, async (req, res) => {
 // PUT /users/:id - Atualizar nome e/ou permissão de um usuário
 router.put('/:id', auth, authorizeAdminOrDev, async (req, res) => {
   const { id } = req.params;
-  const { nome, permissao } = req.body;
+  const { nome, permissao, email } = req.body; // Adicionando email aqui para ver se ele chega
 
-  if (!nome && !permissao) {
-    return res.status(400).json({ success: false, message: 'Pelo menos um campo (nome ou permissao) deve ser fornecido para atualização.' });
+  // Log para verificar o que está chegando no corpo da requisição
+  console.log(`[PUT /users/:id] ID: ${id}, Body Recebido:`, req.body);
+
+  if (!nome && !permissao && !email) { // Ajustar condição para incluir email
+    return res.status(400).json({ success: false, message: 'Pelo menos um campo (nome, permissao ou email) deve ser fornecido para atualização.' });
   }
 
   // Validar tipo de permissão se fornecida
@@ -119,9 +122,13 @@ router.put('/:id', auth, authorizeAdminOrDev, async (req, res) => {
     }
   }
   
-  // Impedir que usuário não-Dev altere a permissão para 'Dev' ou de um 'Dev'
   if (req.user.permissao !== 'Dev' && permissao === 'Dev') {
     return res.status(403).json({ success: false, message: 'Apenas Devs podem atribuir a permissão Dev.' });
+  }
+
+  // Validar email se fornecido (exemplo básico)
+  if (email && !/.+@.+\..+/.test(email)) {
+    return res.status(400).json({ success: false, message: 'Formato de email inválido.' });
   }
 
   try {
@@ -131,11 +138,17 @@ router.put('/:id', auth, authorizeAdminOrDev, async (req, res) => {
     }
     const oldUserData = userToUpdateResult.rows[0];
 
-    // Impedir que Gerentes alterem Devs (a menos que o Dev esteja alterando a si mesmo, o que é coberto por outras lógicas se necessário)
     if (req.user.permissao === 'Gerente' && oldUserData.permissao === 'Dev' && oldUserData.id !== req.user.userId) {
          return res.status(403).json({ success: false, message: 'Gerentes não podem alterar usuários Dev.' });
     }
 
+    // Se o email estiver sendo alterado, verificar se o novo email já existe para outro usuário
+    if (email && email !== oldUserData.email) {
+      const existingEmailResult = await pool.query('SELECT id FROM usuarios WHERE email = $1 AND id != $2', [email, id]);
+      if (existingEmailResult.rows.length > 0) {
+        return res.status(409).json({ success: false, message: 'Este email já está em uso por outro usuário.' });
+      }
+    }
 
     const fieldsToUpdate = [];
     const values = [];
@@ -149,6 +162,16 @@ router.put('/:id', auth, authorizeAdminOrDev, async (req, res) => {
       fieldsToUpdate.push(`permissao = $${queryIndex++}`);
       values.push(permissao);
     }
+    if (email) { // Adicionar email à lógica de atualização
+      fieldsToUpdate.push(`email = $${queryIndex++}`);
+      values.push(email);
+    }
+
+    if (fieldsToUpdate.length === 0) {
+        // Isso não deveria acontecer por causa da verificação inicial, mas é uma segurança
+        return res.status(400).json({ success: false, message: 'Nenhum campo válido para atualização fornecido.' });
+    }
+
     values.push(id);
 
     const query = `UPDATE usuarios SET ${fieldsToUpdate.join(', ')} WHERE id = $${queryIndex} RETURNING id, email, nome, permissao, criado_em`;
@@ -161,13 +184,13 @@ router.put('/:id', auth, authorizeAdminOrDev, async (req, res) => {
       ACTION_TYPES.USER_UPDATED,
       ENTITY_TYPES.USER,
       updatedUser.id,
-      { oldData: { nome: oldUserData.nome, permissao: oldUserData.permissao }, newData: { nome: updatedUser.nome, permissao: updatedUser.permissao } }
+      { oldData: { nome: oldUserData.nome, permissao: oldUserData.permissao, email: oldUserData.email }, newData: { nome: updatedUser.nome, permissao: updatedUser.permissao, email: updatedUser.email } }
     );
 
     res.json({ success: true, user: updatedUser });
   } catch (error) {
     console.error(`Erro ao atualizar usuário ${id}:`, error);
-    await logAction(req.user.userId, req.user.email, ACTION_TYPES.SYSTEM_ERROR, ENTITY_TYPES.USER, id, { error: error.message, details: `Falha ao atualizar usuário ${id}`, requestBody: req.body });
+    await logAction(req.user?.userId, req.user?.email, ACTION_TYPES.SYSTEM_ERROR, ENTITY_TYPES.USER, id, { error: error.message, details: `Falha ao atualizar usuário ${id}`, requestBody: req.body });
     res.status(500).json({ success: false, message: 'Erro interno do servidor.' });
   }
 });
