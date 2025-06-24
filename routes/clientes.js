@@ -31,7 +31,10 @@ router.get('/', auth, async (req, res) => {
         data_saida, 
         sistema, 
         tipo_servico, 
-        created_at
+        created_at,
+        resp_fiscal,
+        resp_contabil,
+        resp_dp
       FROM clientes
     `);
 
@@ -56,7 +59,8 @@ router.post('/', auth, async (req, res) => {
     const {
       codigo, nome, razao_social, cpf_cnpj, regime_fiscal, situacao, tipo_pessoa,
       estado, municipio, status, possui_ie, ie, filial, empresa_matriz, grupo,
-      segmento, data_entrada, data_saida, sistema, tipo_servico
+      segmento, data_entrada, data_saida, sistema, tipo_servico,
+      resp_fiscal, resp_contabil, resp_dp 
     } = req.body;
 
     // Validação básica
@@ -107,15 +111,18 @@ router.post('/', auth, async (req, res) => {
       INSERT INTO clientes (
         codigo, nome, razao_social, cpf_cnpj, regime_fiscal, situacao, tipo_pessoa,
         estado, municipio, status, possui_ie, ie, filial, empresa_matriz, grupo,
-      segmento, data_entrada, data_saida, sistema, tipo_servico, created_at, created_by_user_id, updated_by_user_id
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, CURRENT_TIMESTAMP, $21, $21)
+        segmento, data_entrada, data_saida, sistema, tipo_servico, 
+        resp_fiscal, resp_contabil, resp_dp, 
+        created_at, created_by_user_id, updated_by_user_id
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, CURRENT_TIMESTAMP, $24, $24)
       RETURNING *
       `,
       [
         codigo, nome, razao_social, cpf_cnpj, regime_fiscal, situacao, tipo_pessoa,
         estado, municipio, status, possui_ie, ie, filial, empresa_matriz, grupo,
-      segmento, data_entrada, data_saida || null, sistema, JSON.stringify(tipo_servico),
-      req.user.userId // For created_by_user_id and updated_by_user_id
+        segmento, data_entrada, data_saida || null, sistema, JSON.stringify(tipo_servico),
+        resp_fiscal, resp_contabil, resp_dp,
+        req.user.userId // For created_by_user_id and updated_by_user_id
       ]
     );
 
@@ -159,7 +166,8 @@ router.put('/:id', auth, async (req, res) => {
     const {
       codigo, nome, razao_social, cpf_cnpj, regime_fiscal, situacao, tipo_pessoa,
       estado, municipio, status, possui_ie, ie, filial, empresa_matriz, grupo,
-      segmento, data_entrada, data_saida, sistema, tipo_servico
+      segmento, data_entrada, data_saida, sistema, tipo_servico,
+      resp_fiscal, resp_contabil, resp_dp
     } = req.body; // Removido tipo_pessoa duplicado
 
     // Verificar se o cliente existe
@@ -236,15 +244,19 @@ router.put('/:id', auth, async (req, res) => {
         data_saida = $18, 
         sistema = $19, 
         tipo_servico = $20,
+        resp_fiscal = $21,
+        resp_contabil = $22,
+        resp_dp = $23,
         updated_at = CURRENT_TIMESTAMP,
-        updated_by_user_id = $22
-      WHERE id = $21
+        updated_by_user_id = $25
+      WHERE id = $24
       RETURNING *
       `,
       [
         codigo, nome, razao_social, cpf_cnpj, regime_fiscal, situacao, tipo_pessoa,
         estado, municipio, status, possui_ie, ie, filial, empresa_matriz, grupo,
         segmento, data_entrada, data_saida || null, sistema, JSON.stringify(tipo_servico), 
+        resp_fiscal, resp_contabil, resp_dp,
         id, req.user.userId // For updated_by_user_id
       ]
     );
