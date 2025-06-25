@@ -184,38 +184,64 @@ router.put('/:id', auth, checkAdminPermission, async (req, res) => {
   }
 });
 
-// PUT /api/perguntas-semana/:id/alternar-status - Ativar/Desativar pergunta (Gerente/Dev)
-// Esta rota irá ativar a pergunta :id e desativar todas as outras.
+// DELETE /perguntas-semana/:id - Excluir pergunta permanentemente
+router.delete('/:id', auth, checkAdminPermission, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const deleteOp = await pool.query('DELETE FROM perguntas_semana WHERE id = $1 RETURNING id', [id]);
+    if (deleteOp.rowCount === 0) {
+      return res.status(404).json({ success: false, message: 'Pergunta não encontrada.' });
+    }
+    // ON DELETE CASCADE deve ter removido as respostas
+    res.json({ success: true, message: 'Pergunta e suas respostas foram excluídas permanentemente.' });
+  } catch (err) {
+    console.error('Erro ao excluir pergunta:', err.message);
+    res.status(500).json({ success: false, message: 'Erro do servidor ao excluir pergunta.' });
+  }
+});
+
+// DELETE /perguntas-semana/:id/respostas - Limpar histórico de respostas de uma pergunta
+router.delete('/:id/respostas', auth, checkAdminPermission, async (req, res) => {
+  const { id: pergunta_id } = req.params;
+  try {
+    // Verificar se a pergunta existe primeiro
+    const perguntaExists = await pool.query('SELECT id FROM perguntas_semana WHERE id = $1', [pergunta_id]);
+    if (perguntaExists.rowCount === 0) {
+      return res.status(404).json({ success: false, message: 'Pergunta não encontrada.' });
+    }
+
+    await pool.query('DELETE FROM respostas_pergunta_semana WHERE pergunta_id = $1', [pergunta_id]);
+    res.json({ success: true, message: 'Histórico de respostas limpo com sucesso.' });
+  } catch (err) {
+    console.error('Erro ao limpar respostas da pergunta:', err.message);
+    res.status(500).json({ success: false, message: 'Erro do servidor ao limpar respostas.' });
+  }
+});
+
+// PUT /perguntas-semana/:id/alternar-status - Ativar uma pergunta e desativar outras (manter/verificar sua implementação)
 router.put('/:id/alternar-status', auth, checkAdminPermission, async (req, res) => {
   const { id: perguntaIdParaAtivar } = req.params;
-  const client = await pool.connect(); // Usar transação
-
+  const client = await pool.connect();
   try {
     await client.query('BEGIN');
-
-    // Desativar todas as outras perguntas
     await client.query('UPDATE perguntas_semana SET ativa = FALSE WHERE id != $1', [perguntaIdParaAtivar]);
-
-    // Ativar a pergunta especificada (ou alternar seu estado se já for a única)
-    // Para garantir que ela fique ativa:
     const result = await client.query(
         'UPDATE perguntas_semana SET ativa = TRUE WHERE id = $1 RETURNING *', 
         [perguntaIdParaAtivar]
     );
-
     if (result.rowCount === 0) {
       await client.query('ROLLBACK');
       return res.status(404).json({ success: false, message: 'Pergunta não encontrada.' });
     }
-    
     await client.query('COMMIT');
-
+    // Adicionar busca do nome do criador para consistência com outras rotas
     const updatedQuestion = result.rows[0];
-    const adminUser = await pool.query('SELECT nome FROM usuarios WHERE id = $1', [updatedQuestion.criado_por_usuario_id]);
-    const criado_por_usuario_nome = adminUser.rows.length > 0 ? adminUser.rows[0].nome : null;
-
+    let criado_por_usuario_nome = null;
+    if (updatedQuestion.criado_por_usuario_id) {
+        const adminUser = await pool.query('SELECT nome FROM usuarios WHERE id = $1', [updatedQuestion.criado_por_usuario_id]);
+        criado_por_usuario_nome = adminUser.rows.length > 0 ? adminUser.rows[0].nome : null;
+    }
     res.json({ ...updatedQuestion, criado_por_usuario_nome });
-
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('Erro ao alternar status da pergunta:', err.message);
