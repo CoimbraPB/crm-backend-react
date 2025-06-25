@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const pool = require('../database'); // Seu arquivo de conexão com o banco
-const auth = require('../middleware/auth'); // Seu middleware de autenticação
+const pool = require('../config/database');
+const auth = require('../middleware/auth');
 
 // Middleware para verificar permissão de Gerente ou Dev
 const checkAdminPermission = (req, res, next) => {

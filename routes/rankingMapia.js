@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const pool = require('../database');
+const pool = require('../config/database');
 const auth = require('../middleware/auth');
 
 // Middleware para verificar permissão de Gerente ou Dev
