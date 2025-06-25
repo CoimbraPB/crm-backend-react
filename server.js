@@ -22,6 +22,12 @@ app.use('/gestor-occurrences', require('./routes/gestorOccurrences'));
 app.use('/users', require('./routes/users'));
 app.use('/audit-logs', require('./routes/auditLogs')); // Novo endpoint de logs de auditoria
 
+// NOVAS ROTAS PARA O DASHBOARD
+app.use('/api/mensagens-motivacionais', require('./routes/mensagensMotivacionais'));
+app.use('/api/ranking-mapia', require('./routes/rankingMapia'));
+app.use('/api/perguntas-semana', require('./routes/perguntasSemana'));
+
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({ 
