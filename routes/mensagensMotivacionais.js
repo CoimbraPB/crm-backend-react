@@ -81,11 +81,18 @@ router.put('/:id/inativar', auth, checkAdminPermission, async (req, res) => {
 router.get('/stats', auth, async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT COUNT(*) as totalMensagensMes
+      `SELECT COUNT(*) as "totalMensagensMes" -- Aspas duplas aqui
        FROM mensagens_motivacionais
        WHERE ativo = TRUE AND date_trunc('month', data_postagem) = date_trunc('month', current_date)`
     );
-    res.json(result.rows[0]);
+    if (result.rows.length > 0) {
+        // O COUNT(*) sempre retorna uma linha, mesmo que a contagem seja 0.
+        // O valor da contagem será uma string, converter para número é uma boa prática.
+        res.json({ totalMensagensMes: parseInt(result.rows[0].totalMensagensMes, 10) });
+    } else {
+        // Isso não deveria acontecer com COUNT(*), mas por segurança:
+        res.json({ totalMensagensMes: 0 });
+    }
   } catch (err) {
     console.error('Erro ao buscar estatísticas de mensagens:', err.message);
     res.status(500).json({ success: false, message: 'Erro do servidor ao buscar estatísticas.' });
