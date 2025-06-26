@@ -5,6 +5,32 @@ const { logAction, ACTION_TYPES, ENTITY_TYPES } = require('../services/auditLogS
 
 const router = express.Router();
 
+// NOVA ROTA: GET /clients/matrizes - Listar apenas clientes que são matriz
+router.get('/matrizes', auth, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        id, 
+        codigo, 
+        nome, 
+        razao_social,
+        filial 
+      FROM clientes
+      WHERE filial = 'Não' OR filial = 'Nao' -- Adicionando 'Nao' sem acento por segurança
+      ORDER BY nome ASC
+    `);
+
+    // Não é necessário mapear/transformar os dados aqui, pois são simples.
+    // Apenas retornamos os campos necessários para o frontend.
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Erro ao listar clientes matrizes:', error);
+    // Log de auditoria para falha, se desejar
+    // await logAction(req.user?.userId, req.user?.email, 'CLIENT_MATRIZ_LIST_FAILED', ENTITY_TYPES.CLIENT, null, { error: error.message });
+    res.status(500).json({ success: false, message: 'Erro interno ao listar clientes matrizes.' });
+  }
+});
+
 // GET /clients - Listar todos os clientes
 router.get('/', auth, async (req, res) => {
   try {
@@ -36,6 +62,7 @@ router.get('/', auth, async (req, res) => {
         resp_contabil,
         resp_dp
       FROM clientes
+      ORDER BY nome ASC -- Adicionado para consistência
     `);
 
     const clients = result.rows.map(client => ({
@@ -80,7 +107,7 @@ router.post('/', auth, async (req, res) => {
     const validSituacao = ['Com movimento', 'Sem movimento'];
     const validTipoPessoa = ['Física', 'Jurídica'];
     const validStatus = ['Ativo', 'Inativo', 'Potencial', 'Bloqueado'];
-    const validPossuiIe = ['Sim', 'Não', 'Isento'];
+    const validPossuiIe = ['Sim', 'Não', 'Isento']; // Mantido 'Não'
     const validSegmento = ['Comércio', 'Holding', 'Indústria', 'Locação', 'Produtor Rural', 'Serviço', 'Transporte'];
     const validSistema = ['Domínio', 'Protheus', 'Rodopar', 'Sap', 'Senior', 'Outros'];
 
@@ -105,6 +132,20 @@ router.post('/', auth, async (req, res) => {
     if (!validSistema.includes(sistema)) {
       return res.status(400).json({ message: 'Sistema inválido' });
     }
+    
+    // Garantir que o valor de 'filial' seja 'Sim' ou 'Não' (ou 'Nao')
+    let filialValue = filial;
+    if (typeof filial === 'string') {
+        if (filial.trim().toLowerCase() === 'sim') filialValue = 'Sim';
+        else if (filial.trim().toLowerCase() === 'não' || filial.trim().toLowerCase() === 'nao') filialValue = 'Não';
+        // Se não for nenhum desses, pode ser um valor inválido ou o frontend deve garantir o formato.
+        // Por ora, vamos assumir que o frontend envia 'Sim' ou 'Não'.
+    } else {
+        // Tratar caso 'filial' não seja string ou seja undefined, se necessário.
+        // Para este contexto, ele deve ser 'Sim' ou 'Não'.
+        return res.status(400).json({ message: "Valor inválido para o campo 'filial'. Deve ser 'Sim' ou 'Não'." });
+    }
+
 
     const result = await pool.query(
       `
@@ -119,7 +160,7 @@ router.post('/', auth, async (req, res) => {
       `,
       [
         codigo, nome, razao_social, cpf_cnpj, regime_fiscal, situacao, tipo_pessoa,
-        estado, municipio, status, possui_ie, ie, filial, empresa_matriz, grupo,
+        estado, municipio, status, possui_ie, ie, filialValue, empresa_matriz, grupo, // Usando filialValue
         segmento, data_entrada, data_saida || null, sistema, JSON.stringify(tipo_servico),
         resp_fiscal, resp_contabil, resp_dp,
         req.user.userId // For created_by_user_id and updated_by_user_id
@@ -168,7 +209,7 @@ router.put('/:id', auth, async (req, res) => {
       estado, municipio, status, possui_ie, ie, filial, empresa_matriz, grupo,
       segmento, data_entrada, data_saida, sistema, tipo_servico,
       resp_fiscal, resp_contabil, resp_dp
-    } = req.body; // Removido tipo_pessoa duplicado
+    } = req.body; 
 
     // Verificar se o cliente existe
     const clientExistsResult = await pool.query('SELECT * FROM clientes WHERE id = $1', [id]);
@@ -194,7 +235,7 @@ router.put('/:id', auth, async (req, res) => {
     const validSituacao = ['Com movimento', 'Sem movimento'];
     const validTipoPessoa = ['Física', 'Jurídica'];
     const validStatus = ['Ativo', 'Inativo', 'Potencial', 'Bloqueado'];
-    const validPossuiIe = ['Sim', 'Não', 'Isento'];
+    const validPossuiIe = ['Sim', 'Não', 'Isento']; // Mantido 'Não'
     const validSegmento = ['Comércio', 'Holding', 'Indústria', 'Locação', 'Produtor Rural', 'Serviço', 'Transporte'];
     const validSistema = ['Domínio', 'Protheus', 'Rodopar', 'Sap', 'Senior', 'Outros'];
 
@@ -218,6 +259,14 @@ router.put('/:id', auth, async (req, res) => {
     }
     if (!validSistema.includes(sistema)) {
       return res.status(400).json({ message: 'Sistema inválido' });
+    }
+
+    let filialValue = filial;
+    if (typeof filial === 'string') {
+        if (filial.trim().toLowerCase() === 'sim') filialValue = 'Sim';
+        else if (filial.trim().toLowerCase() === 'não' || filial.trim().toLowerCase() === 'nao') filialValue = 'Não';
+    } else {
+        return res.status(400).json({ message: "Valor inválido para o campo 'filial'. Deve ser 'Sim' ou 'Não'." });
     }
 
     const result = await pool.query(
@@ -254,7 +303,7 @@ router.put('/:id', auth, async (req, res) => {
       `,
       [
         codigo, nome, razao_social, cpf_cnpj, regime_fiscal, situacao, tipo_pessoa,
-        estado, municipio, status, possui_ie, ie, filial, empresa_matriz, grupo,
+        estado, municipio, status, possui_ie, ie, filialValue, empresa_matriz, grupo, // Usando filialValue
         segmento, data_entrada, data_saida || null, sistema, JSON.stringify(tipo_servico), 
         resp_fiscal, resp_contabil, resp_dp,
         id, req.user.userId // For updated_by_user_id
