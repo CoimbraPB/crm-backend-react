@@ -35,7 +35,7 @@ app.use('/setores', require('./routes/setoresRoutes'));
 app.use('/configuracao-analise', require('./routes/configuracaoAnaliseRoutes'));
 app.use('/alocacao-esforco', require('./routes/alocacaoEsforcoRoutes'));
 app.use('/analise-contratual', require('./routes/analiseContratualRoutes'));
-app.use('/setor-cargos', require('./routes/setorCargosRoutes'));
+app.use('/associacoes', require('./routes/setorCargosRoutes'));
 
 // Health check
 app.get('/health', (req, res) => {
