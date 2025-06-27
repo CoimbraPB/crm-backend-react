@@ -67,7 +67,7 @@ router.post('/faturamento/:faturamento_id', auth, checkAccessPermission, async (
           quantidade_funcionarios = EXCLUDED.quantidade_funcionarios,
           total_horas_gastas_cargo = EXCLUDED.total_horas_gastas_cargo,
           registrado_por_usuario_id = EXCLUDED.registrado_por_usuario_id,
-          data_registro = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+          data_registro = CURRENT_TIMESTAMP -- updated_at será tratado pelo trigger
         RETURNING *;`;
       const result = await client.query(query, [faturamento_id, aloc.setor_id, aloc.cargo_id, aloc.quantidade_funcionarios, aloc.total_horas_gastas_cargo, userId]);
       results.push(result.rows[0]);
