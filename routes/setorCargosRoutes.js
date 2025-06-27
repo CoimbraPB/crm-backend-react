@@ -4,104 +4,150 @@ const pool = require('../config/database');
 const auth = require('../middleware/auth');
 const { logAction, ACTION_TYPES, ENTITY_TYPES } = require('../services/auditLogService');
 
-const checkAccessPermission = (req, res, next) => {
-  const userPermission = req.user.permissao;
-  // Ajuste 'Gestor' se o nome do perfil do seu gestor de área for diferente
-  if (['Gestor', 'Gerente', 'Dev'].includes(userPermission)) { 
+// Middleware de Permissão
+const checkViewPermission = (req, res, next) => {
+  // Assumindo que qualquer usuário logado que acesse o form de alocação pode precisar desta lista
+  // Ou ajuste para ['Gestor', 'Gerente', 'Dev'] se apenas eles podem ver
+  if (req.user) { 
     next();
   } else {
-    logAction(req.user.userId, req.user.email, 'ALOCACAO_ESFORCO_ACCESS_DENIED', 'AlocacaoEsforco', null, { route: req.path, attemptedPermission: userPermission });
     return res.status(403).json({ success: false, message: 'Acesso negado.' });
   }
 };
 
-// ROTA: Obter alocações para um faturamento_id
-router.get('/faturamento/:faturamento_id', auth, checkAccessPermission, async (req, res) => {
-  const { faturamento_id } = req.params;
+const checkEditPermission = (req, res, next) => {
+    const userPermission = req.user.permissao;
+    if (['Gerente', 'Dev'].includes(userPermission)) { // Apenas Gerentes e Devs podem editar associações
+        next();
+    } else {
+        logAction(req.user.userId, req.user.email, 'SETOR_CARGO_ASSOC_ACCESS_DENIED', ENTITY_TYPES.SETOR_CARGO_ASSOCIACAO || 'SetorCargoAssociacao', null, { route: req.path, attemptedPermission: userPermission });
+        return res.status(403).json({ success: false, message: 'Acesso negado. Permissão insuficiente.' });
+    }
+};
+
+// ROTA: Listar todos os cargos ATIVOS associados a um setor específico
+router.get('/setor/:setor_id/cargos', auth, checkViewPermission, async (req, res) => {
+  const { setor_id } = req.params;
   try {
     const result = await pool.query(
-      `SELECT ae.id, ae.faturamento_id, ae.setor_id, s.nome_setor, ae.cargo_id, c.nome_cargo, 
-         ae.quantidade_funcionarios, ae.total_horas_gastas_cargo, 
-         ae.registrado_por_usuario_id, u.nome as nome_usuario_registro, ae.data_registro
-       FROM alocacao_esforco_cliente_cargo ae
-       JOIN setores s ON ae.setor_id = s.id_setor
-       JOIN cargos c ON ae.cargo_id = c.id_cargo
-       LEFT JOIN usuarios u ON ae.registrado_por_usuario_id = u.id
-       WHERE ae.faturamento_id = $1 ORDER BY s.nome_setor, c.nome_cargo`,
-      [faturamento_id]
+      `SELECT c.id_cargo, c.nome_cargo, c.ativo 
+       FROM cargos c
+       JOIN setor_cargos sc ON c.id_cargo = sc.cargo_id
+       WHERE sc.setor_id = $1 AND c.ativo = TRUE
+       ORDER BY c.nome_cargo ASC`,
+      [setor_id]
     );
-    res.json({ success: true, alocacoes: result.rows });
+    res.json({ success: true, cargos: result.rows });
   } catch (error) {
-    console.error(`Erro GET /alocacao-esforco/faturamento/${faturamento_id}:`, error);
-    logAction(req.user.userId, req.user.email, 'ALOCACAO_ESFORCO_GET_FAILED', 'AlocacaoEsforco', null, { faturamento_id, error: error.message });
-    res.status(500).json({ success: false, message: 'Erro ao buscar alocações.' });
+    console.error(`Erro ao listar cargos para o setor ${setor_id}:`, error);
+    res.status(500).json({ success: false, message: 'Erro interno ao listar cargos do setor.' });
   }
 });
 
-// ROTA: Salvar (Criar/Atualizar em lote) alocações para um faturamento_id
-router.post('/faturamento/:faturamento_id', auth, checkAccessPermission, async (req, res) => {
-  const { faturamento_id } = req.params;
-  const alocacoes = req.body.alocacoes;
-  const userId = req.user.userId, userEmail = req.user.email;
-  if (!Array.isArray(alocacoes)) return res.status(400).json({ success: false, message: 'Payload deve ser um array.' });
+// ROTA: Adicionar um ou mais cargos a um setor
+router.post('/setor/:setor_id/cargos', auth, checkEditPermission, async (req, res) => {
+  const { setor_id } = req.params;
+  const { cargo_ids } = req.body; // Espera um array de cargo_ids
+  const userId = req.user.userId;
+  const userEmail = req.user.email;
 
-  for (const aloc of alocacoes) {
-    // MODIFICAÇÃO AQUI: Permite quantidade_funcionarios >= 0
-    if (aloc.setor_id === undefined || aloc.cargo_id === undefined || 
-        aloc.quantidade_funcionarios === undefined || parseInt(String(aloc.quantidade_funcionarios), 10) < 0 || // Alterado de <=0 para <0
-        aloc.total_horas_gastas_cargo === undefined || parseFloat(String(aloc.total_horas_gastas_cargo)) < 0) {
-      // Mensagem de erro ajustada para refletir que >=0 é permitido para quantidade e horas
-      return res.status(400).json({ success: false, message: 'Dados inválidos: setor, cargo são obrigatórios; quantidade e horas não podem ser negativas.' });
-    }
+  if (!Array.isArray(cargo_ids) || cargo_ids.length === 0) {
+    return res.status(400).json({ success: false, message: 'Array de cargo_ids é obrigatório e não pode ser vazio.' });
   }
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const results = [];
-    for (const aloc of alocacoes) {
-      const query = `
-        INSERT INTO alocacao_esforco_cliente_cargo
-          (faturamento_id, setor_id, cargo_id, quantidade_funcionarios, total_horas_gastas_cargo, registrado_por_usuario_id, data_registro)
-        VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
-        ON CONFLICT (faturamento_id, setor_id, cargo_id) DO UPDATE SET
-          quantidade_funcionarios = EXCLUDED.quantidade_funcionarios,
-          total_horas_gastas_cargo = EXCLUDED.total_horas_gastas_cargo,
-          registrado_por_usuario_id = EXCLUDED.registrado_por_usuario_id,
-          data_registro = CURRENT_TIMESTAMP -- updated_at será tratado pelo trigger
-        RETURNING *;`;
-      const result = await client.query(query, [faturamento_id, aloc.setor_id, aloc.cargo_id, aloc.quantidade_funcionarios, aloc.total_horas_gastas_cargo, userId]);
-      results.push(result.rows[0]);
+    const inseridosComDetalhes = [];
+    const jaExistentes = [];
+
+    for (const cargo_id_str of cargo_ids) { // Renomeado para evitar confusão com a variável de escopo
+      const cargo_id = parseInt(cargo_id_str, 10);
+      if (isNaN(cargo_id)) {
+        console.warn(`Cargo ID inválido ignorado: ${cargo_id_str}`);
+        jaExistentes.push({ cargo_id: cargo_id_str, nome_cargo: 'ID Inválido' });
+        continue;
+      }
+
+      const insertRes = await client.query(
+        'INSERT INTO setor_cargos (setor_id, cargo_id) VALUES ($1, $2) ON CONFLICT (setor_id, cargo_id) DO NOTHING RETURNING *',
+        [setor_id, cargo_id]
+      );
+      
+      if (insertRes.rows.length > 0) {
+        const cargoInfo = await client.query('SELECT nome_cargo FROM cargos WHERE id_cargo = $1', [cargo_id]);
+        inseridosComDetalhes.push({ 
+            setor_id: parseInt(setor_id, 10), 
+            cargo_id: cargo_id,
+            nome_cargo: cargoInfo.rows.length > 0 ? cargoInfo.rows[0].nome_cargo : `Cargo ID ${cargo_id}`
+        });
+      } else {
+        const cargoInfo = await client.query('SELECT nome_cargo FROM cargos WHERE id_cargo = $1', [cargo_id]);
+        jaExistentes.push({
+            cargo_id: cargo_id,
+            nome_cargo: cargoInfo.rows.length > 0 ? cargoInfo.rows[0].nome_cargo : `Cargo ID ${cargo_id}`
+        });
+      }
     }
+    
     await client.query('COMMIT');
-    logAction(userId, userEmail, 'ALOCACAO_ESFORCO_SAVED_BATCH', 'AlocacaoEsforco', null, { faturamento_id, count: results.length });
-    res.status(200).json({ success: true, message: `${results.length} alocações salvas para faturamento ${faturamento_id}!`, saved_alocacoes: results });
+    logAction(userId, userEmail, ACTION_TYPES.SETOR_CARGOS_ASSOCIATED || 'SETOR_CARGOS_ASSOCIATED', ENTITY_TYPES.SETOR_CARGO_ASSOCIACAO || 'SetorCargoAssociacao', setor_id, { inseridos: inseridosComDetalhes.map(c => c.cargo_id), ignorados: jaExistentes.map(c => c.cargo_id) });
+    res.status(201).json({ 
+        success: true, 
+        message: `${inseridosComDetalhes.length} cargos associados ao setor. ${jaExistentes.length > 0 ? `${jaExistentes.length} já estavam associados ou eram IDs inválidos.` : ''}`, 
+        associacoes_criadas: inseridosComDetalhes 
+    });
   } catch (error) {
     await client.query('ROLLBACK');
-    console.error(`Erro POST /alocacao-esforco/faturamento/${faturamento_id}:`, error);
-    logAction(userId, userEmail, 'ALOCACAO_ESFORCO_SAVE_BATCH_FAILED', 'AlocacaoEsforco', null, { faturamento_id, error: error.message });
-    res.status(500).json({ success: false, message: 'Erro ao salvar alocações.' });
+    console.error(`Erro ao associar cargos ao setor ${setor_id}:`, error);
+    logAction(userId, userEmail, ACTION_TYPES.SETOR_CARGOS_ASSOCIATE_FAILED || 'SETOR_CARGOS_ASSOCIATE_FAILED', ENTITY_TYPES.SETOR_CARGO_ASSOCIACAO || 'SetorCargoAssociacao', setor_id, { cargo_ids_tentados: cargo_ids, error: error.message });
+    res.status(500).json({ success: false, message: 'Erro interno ao associar cargos.' });
   } finally {
     client.release();
   }
 });
 
-// ROTA: Deletar uma alocação de esforço específica
-router.delete('/:id_alocacao', auth, checkAccessPermission, async (req, res) => {
-    const { id_alocacao } = req.params;
-    const userId = req.user.userId, userEmail = req.user.email;
-    try {
-        const result = await pool.query('DELETE FROM alocacao_esforco_cliente_cargo WHERE id = $1 RETURNING *', [id_alocacao]);
-        if (result.rowCount === 0) {
-            logAction(userId, userEmail, 'ALOCACAO_ESFORCO_DELETE_NOT_FOUND', 'AlocacaoEsforco', id_alocacao);
-            return res.status(404).json({ success: false, message: 'Alocação não encontrada.' });
-        }
-        logAction(userId, userEmail, 'ALOCACAO_ESFORCO_DELETED', 'AlocacaoEsforco', id_alocacao, { deletedData: result.rows[0] });
-        res.status(200).json({ success: true, message: 'Alocação excluída.' });
-    } catch (error) {
-        console.error(`Erro DELETE /alocacao-esforco/${id_alocacao}:`, error);
-        logAction(userId, userEmail, 'ALOCACAO_ESFORCO_DELETE_FAILED', 'AlocacaoEsforco', id_alocacao, { error: error.message });
-        res.status(500).json({ success: false, message: 'Erro ao excluir alocação.' });
+// ROTA: Remover uma associação específica entre setor e cargo
+router.delete('/setor/:setor_id/cargo/:cargo_id', auth, checkEditPermission, async (req, res) => {
+  const { setor_id, cargo_id } = req.params;
+  const userId = req.user.userId;
+  const userEmail = req.user.email;
+  try {
+    const result = await pool.query(
+      'DELETE FROM setor_cargos WHERE setor_id = $1 AND cargo_id = $2 RETURNING *',
+      [setor_id, cargo_id]
+    );
+    if (result.rowCount === 0) {
+      return res.status(404).json({ success: false, message: 'Associação não encontrada para remoção.' });
     }
+    logAction(userId, userEmail, ACTION_TYPES.SETOR_CARGO_DISSOCIATED || 'SETOR_CARGO_DISSOCIATED', ENTITY_TYPES.SETOR_CARGO_ASSOCIACAO || 'SetorCargoAssociacao', setor_id, { cargo_id_removido: cargo_id });
+    res.json({ success: true, message: 'Associação cargo-setor removida com sucesso.' });
+  } catch (error) {
+    console.error(`Erro ao remover associação do cargo ${cargo_id} do setor ${setor_id}:`, error);
+    logAction(userId, userEmail, ACTION_TYPES.SETOR_CARGO_DISSOCIATE_FAILED || 'SETOR_CARGO_DISSOCIATE_FAILED', ENTITY_TYPES.SETOR_CARGO_ASSOCIACAO || 'SetorCargoAssociacao', setor_id, { cargo_id, error: error.message });
+    res.status(500).json({ success: false, message: 'Erro interno ao remover associação.' });
+  }
+});
+
+// ROTA: Listar cargos ATIVOS NÃO associados a um setor específico (para UI de seleção)
+router.get('/setor/:setor_id/cargos-nao-associados', auth, checkViewPermission, async (req, res) => {
+  const { setor_id } = req.params;
+  try {
+    const result = await pool.query(
+      `SELECT id_cargo, nome_cargo, ativo 
+       FROM cargos c
+       WHERE c.ativo = TRUE AND NOT EXISTS (
+         SELECT 1 FROM setor_cargos sc 
+         WHERE sc.setor_id = $1 AND sc.cargo_id = c.id_cargo
+       )
+       ORDER BY c.nome_cargo ASC`,
+      [setor_id]
+    );
+    res.json({ success: true, cargos: result.rows });
+  } catch (error) {
+    console.error(`Erro ao listar cargos não associados ao setor ${setor_id}:`, error);
+    res.status(500).json({ success: false, message: 'Erro interno ao listar cargos não associados.' });
+  }
 });
 
 module.exports = router;
