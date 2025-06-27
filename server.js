@@ -16,8 +16,8 @@ app.use(express.json());
 
 // Routes
 app.use('/auth', require('./routes/auth'));
-app.use('/clients', require('./routes/clientes')); // Esta rota já existe
-app.use('/faturamentos', require('./routes/faturamentos')); // NOVA ROTA ADICIONADA AQUI
+app.use('/clients', require('./routes/clientes'));
+app.use('/faturamentos', require('./routes/faturamentos'));
 app.use('/crm-occurrences', require('./routes/crm-ocorrencias'));
 app.use('/gestor-occurrences', require('./routes/gestorOccurrences'));
 app.use('/users', require('./routes/users'));
@@ -30,12 +30,12 @@ app.use('/perguntas-semana', require('./routes/perguntasSemana'));
 
 // NOVAS ROTAS PARA ANALISE CONTRATUAL
 app.use('/cargos', require('./routes/cargosRoutes')); 
-app.use('/faturamentos', require('./routes/faturamentos'));
+// app.use('/faturamentos', require('./routes/faturamentos')); // Rota duplicada, já definida acima
 app.use('/setores', require('./routes/setoresRoutes'));
 app.use('/configuracao-analise', require('./routes/configuracaoAnaliseRoutes'));
 app.use('/alocacao-esforco', require('./routes/alocacaoEsforcoRoutes'));
 app.use('/analise-contratual', require('./routes/analiseContratualRoutes'));
-app.use('/associacoes', require('./routes/setorCargosRoutes'));
+app.use('/associacoes', require('./routes/setorCargosRoutes')); // CORRIGIDO de '/setor-cargos' para '/associacoes'
 
 // Health check
 app.get('/health', (req, res) => {
@@ -51,8 +51,7 @@ app.get('/', (req, res) => {
   res.json({ 
     message: 'CRM Backend API',
     version: '1.0.0',
-    // Você pode adicionar '/faturamentos' aqui se quiser listá-lo
-    endpoints: ['/auth/login', '/auth/verify', '/clients', '/faturamentos', '/crm-occurrences', '/gestor-occurrences', '/users', '/audit-logs', '/health'] 
+    endpoints: ['/auth/login', '/auth/verify', '/clients', '/faturamentos', '/crm-occurrences', '/gestor-occurrences', '/users', '/audit-logs', '/health', '/cargos', '/setores', '/configuracao-analise', '/alocacao-esforco', '/analise-contratual', '/associacoes'] 
   });
 });
 
