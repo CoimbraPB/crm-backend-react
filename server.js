@@ -28,6 +28,9 @@ app.use('/mensagens-motivacionais', require('./routes/mensagensMotivacionais'));
 app.use('/ranking-mapia', require('./routes/rankingMapia'));
 app.use('/perguntas-semana', require('./routes/perguntasSemana'));
 
+// NOVAS ROTAS PARA ANALISE CONTRATUAL
+app.use('/cargos', require('./routes/cargosRoutes')); 
+app.use('/faturamentos', require('./routes/faturamentos'));
 
 // Health check
 app.get('/health', (req, res) => {
