@@ -31,6 +31,7 @@ app.use('/perguntas-semana', require('./routes/perguntasSemana'));
 // NOVAS ROTAS PARA ANALISE CONTRATUAL
 app.use('/cargos', require('./routes/cargosRoutes')); 
 app.use('/faturamentos', require('./routes/faturamentos'));
+app.use('/setores', require('./routes/setoresRoutes'));
 
 // Health check
 app.get('/health', (req, res) => {
@@ -55,5 +56,5 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV}`);
   // E aqui também, se quiser logar no console
-  console.log('Available endpoints:', ['/auth/login', '/auth/verify', '/clients', '/faturamentos', '/crm-occurrences', '/gestor-occurrences', '/users', '/audit-logs', '/health']);
+  console.log('Available endpoints:', ['/auth/login', '/auth/verify', '/clients', '/faturamentos', '/crm-occurrences', '/gestor-occurrences', '/users', '/audit-logs', '/health', '/cargos', '/mensagens-motivacionais', '/ranking-mapia', '/perguntas-semana', '/setores'] );
 });
