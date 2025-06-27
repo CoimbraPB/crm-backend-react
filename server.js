@@ -34,6 +34,7 @@ app.use('/faturamentos', require('./routes/faturamentos'));
 app.use('/setores', require('./routes/setoresRoutes'));
 app.use('/configuracao-analise', require('./routes/configuracaoAnaliseRoutes'));
 app.use('/alocacao-esforco', require('./routes/alocacaoEsforcoRoutes'));
+app.use('/analise-contratual', require('./routes/analiseContratualRoutes'));
 
 // Health check
 app.get('/health', (req, res) => {
