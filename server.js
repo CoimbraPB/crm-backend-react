@@ -33,6 +33,7 @@ app.use('/cargos', require('./routes/cargosRoutes'));
 app.use('/faturamentos', require('./routes/faturamentos'));
 app.use('/setores', require('./routes/setoresRoutes'));
 app.use('/configuracao-analise', require('./routes/configuracaoAnaliseRoutes'));
+app.use('/alocacao-esforco', require('./routes/alocacaoEsforcoRoutes'));
 
 // Health check
 app.get('/health', (req, res) => {
