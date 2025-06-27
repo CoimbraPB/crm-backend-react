@@ -46,10 +46,12 @@ router.post('/faturamento/:faturamento_id', auth, checkAccessPermission, async (
   if (!Array.isArray(alocacoes)) return res.status(400).json({ success: false, message: 'Payload deve ser um array.' });
 
   for (const aloc of alocacoes) {
+    // MODIFICAÇÃO AQUI: Permite quantidade_funcionarios >= 0
     if (aloc.setor_id === undefined || aloc.cargo_id === undefined || 
-        aloc.quantidade_funcionarios === undefined || parseInt(aloc.quantidade_funcionarios) <= 0 ||
-        aloc.total_horas_gastas_cargo === undefined || parseFloat(aloc.total_horas_gastas_cargo) < 0) {
-      return res.status(400).json({ success: false, message: 'Dados inválidos em uma ou mais alocações.' });
+        aloc.quantidade_funcionarios === undefined || parseInt(String(aloc.quantidade_funcionarios), 10) < 0 || // Alterado de <=0 para <0
+        aloc.total_horas_gastas_cargo === undefined || parseFloat(String(aloc.total_horas_gastas_cargo)) < 0) {
+      // Mensagem de erro ajustada para refletir que >=0 é permitido para quantidade e horas
+      return res.status(400).json({ success: false, message: 'Dados inválidos: setor, cargo são obrigatórios; quantidade e horas não podem ser negativas.' });
     }
   }
   const client = await pool.connect();
