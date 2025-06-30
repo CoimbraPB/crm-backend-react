@@ -168,9 +168,9 @@ const upsertAnaliseQuery = `
   ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP, $9,
     $10,
-    COALESCE($10, 0) - $8,
+    COALESCE($10, 0::numeric) - $8,
     CASE 
-      WHEN COALESCE($10, 0) - $8 < 0 THEN 'REVISAR_CONTRATO' 
+      WHEN COALESCE($10, 0::numeric) - $8 < 0 THEN 'REVISAR_CONTRATO' 
       ELSE 'OK' 
     END
   )
@@ -191,18 +191,19 @@ const upsertAnaliseQuery = `
     diferenca_analise = COALESCE(
       analises_contratuais_cliente.valor_contrato_atual_cliente_input_gerente,
       EXCLUDED.valor_contrato_atual_cliente_input_gerente,
-      0
+      0::numeric
     ) - EXCLUDED.valor_ideal_calculado_com_margem,
     status_alerta = CASE 
       WHEN COALESCE(
         analises_contratuais_cliente.valor_contrato_atual_cliente_input_gerente,
         EXCLUDED.valor_contrato_atual_cliente_input_gerente,
-        0
+        0::numeric
       ) - EXCLUDED.valor_ideal_calculado_com_margem < 0 THEN 'REVISAR_CONTRATO' 
       ELSE 'OK' 
     END
   RETURNING *;
 `;
+
         
       const analiseResult = await client.query(upsertAnaliseQuery, [
         fatura.faturamento_id, fatura.cliente_id, fatura.mes_ano_referencia, valorFaturamentoClienteMes,
