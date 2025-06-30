@@ -44,49 +44,28 @@ router.post('/gerar-analise/:mes_ano', auth, checkPermissionGerencial, async (re
   try {
     await client.query('BEGIN');
 
-    // 1. Buscar configurações globais para o mês/ano
-    const configGlobalRes = await client.query(
-      'SELECT percentual_margem_lucro_desejada, fator_horas_mensal_padrao FROM configuracao_analise_global_mensal WHERE mes_ano_referencia = $1',
+    // 1. Buscar Valores Hora/Cargo para o mês/ano
+    const valoresHoraCargoRes = await client.query(
+      'SELECT cargo_id, valor_hora FROM config_valores_hora_cargo WHERE mes_ano_referencia = $1',
       [mes_ano]
     );
-    if (configGlobalRes.rows.length === 0) {
+
+    if (valoresHoraCargoRes.rows.length === 0) {
       await client.query('ROLLBACK');
-      logAction(userId, userEmail, 'ANALISE_CONTRATUAL_GERAR_FAILED', 'AnaliseContratual', null, { mes_ano, error: 'Configurações globais não definidas.' });
-      return res.status(400).json({ success: false, message: `Erro ao gerar análise: Configurações globais (Margem de Lucro, Fator Horas) não definidas para ${mes_ano}. Por favor, cadastre-as na tela de Configurações da Análise Contratual.` });
-    }
-    const configGlobal = configGlobalRes.rows[0];
-    const percentualMargem = parseFloat(configGlobal.percentual_margem_lucro_desejada) / 100;
-    const fatorHoras = parseInt(configGlobal.fator_horas_mensal_padrao) || FATOR_HORAS_PADRAO_FALLBACK;
-
-    if (isNaN(percentualMargem) || percentualMargem < 0) {
-        await client.query('ROLLBACK');
-        logAction(userId, userEmail, 'ANALISE_CONTRATUAL_GERAR_FAILED', 'AnaliseContratual', null, { mes_ano, error: 'Percentual de margem de lucro inválido.' });
-        return res.status(400).json({ success: false, message: 'Percentual de margem de lucro desejada configurado é inválido.' });
-    }
-    if (isNaN(fatorHoras) || fatorHoras <= 0) {
-        await client.query('ROLLBACK');
-        logAction(userId, userEmail, 'ANALISE_CONTRATUAL_GERAR_FAILED', 'AnaliseContratual', null, { mes_ano, error: 'Fator de horas mensal padrão inválido.' });
-        return res.status(400).json({ success: false, message: 'Fator de horas mensal padrão configurado é inválido.' });
+      logAction(userId, userEmail, 'ANALISE_CONTRATUAL_GERAR_FAILED', 'AnaliseContratual', null, { mes_ano, error: 'Valores hora/cargo não definidos.' });
+      return res.status(400).json({ success: false, message: `Erro ao gerar análise: Valores de hora/cargo não definidos para ${mes_ano}. Por favor, cadastre-os na tela de Configurações da Análise Contratual.` });
     }
 
+    const mapValorHoraCargo = new Map();
+    valoresHoraCargoRes.rows.forEach(vh => {
+      mapValorHoraCargo.set(vh.cargo_id, parseFloat(vh.valor_hora));
+    });
 
-    // 2. Buscar salários configurados para o mês/ano
-    const salariosRes = await client.query(
-      'SELECT setor_id, cargo_id, salario_mensal_base FROM configuracoes_salario_cargo_mensal WHERE mes_ano_referencia = $1',
-      [mes_ano]
-    );
-    const mapSalarios = new Map();
-    salariosRes.rows.forEach(s => mapSalarios.set(`${s.setor_id}-${s.cargo_id}`, parseFloat(s.salario_mensal_base)));
-
-    if (mapSalarios.size === 0) {
-        await client.query('ROLLBACK');
-        logAction(userId, userEmail, 'ANALISE_CONTRATUAL_GERAR_FAILED', 'AnaliseContratual', null, { mes_ano, error: 'Nenhum salário configurado.' });
-        return res.status(400).json({ success: false, message: `Erro ao gerar análise: Nenhum salário configurado para os cargos/setores no mês ${mes_ano}. Por favor, cadastre-os na tela de Configurações da Análise Contratual.` });
-    }
-
-    // 3. Buscar faturamentos do mês que possuem alocação de esforço
+    // 2. Buscar faturamentos do mês que possuem alocação de esforço
+    // A coluna f.valor_faturamento não é mais necessária para o cálculo direto, mas pode ser mantida para referência se a tabela faturamentos ainda for usada para outros fins.
+    // Para a análise contratual, só precisamos do faturamento_id para ligar com alocacao_esforco.
     const faturamentosDoMesRes = await client.query(
-      `SELECT f.id as faturamento_id, f.cliente_id, f.mes_ano as mes_ano_referencia, f.valor_faturamento
+      `SELECT f.id as faturamento_id, f.cliente_id, f.mes_ano as mes_ano_referencia
        FROM faturamentos f 
        WHERE f.mes_ano = $1 AND EXISTS (
          SELECT 1 FROM alocacao_esforco_cliente_cargo ae WHERE ae.faturamento_id = f.id
@@ -104,42 +83,43 @@ router.post('/gerar-analise/:mes_ano', auth, checkPermissionGerencial, async (re
     let warnings = [];
 
     for (const fatura of faturamentosDoMesRes.rows) {
-      // 4. Calcular custo de mão de obra para cada faturamento
+      // 3. Calcular Custo Total Cliente para cada faturamento
       const alocacoesRes = await client.query(
-        'SELECT ae.setor_id, ae.cargo_id, ae.total_horas_gastas_cargo, s.nome_setor, c.nome_cargo FROM alocacao_esforco_cliente_cargo ae JOIN setores s ON s.id_setor = ae.setor_id JOIN cargos c ON c.id_cargo = ae.cargo_id WHERE ae.faturamento_id = $1',
+        `SELECT ae.cargo_id, c.nome_cargo, ae.quantidade_funcionarios, ae.total_horas_gastas_cargo 
+         FROM alocacao_esforco_cliente_cargo ae
+         JOIN cargos c ON ae.cargo_id = c.id_cargo
+         WHERE ae.faturamento_id = $1`,
         [fatura.faturamento_id]
       );
 
       if (alocacoesRes.rows.length === 0) {
-        warnings.push(`Cliente ID ${fatura.cliente_id} (Faturamento ID ${fatura.faturamento_id}): Nenhuma alocação de esforço encontrada, pulando cálculo de custo de mão de obra.`);
+        warnings.push(`Cliente ID ${fatura.cliente_id} (Faturamento ID ${fatura.faturamento_id}): Nenhuma alocação de esforço (horas/cargos) encontrada. Este cliente não será incluído na análise.`);
         continue; 
       }
       
-      let custoTotalMaoDeObraCliente = 0;
-      let temAlocacaoValida = false;
+      let custoTotalCliente = 0;
+      let todosCargosTinhamValorHora = true;
 
       for (const aloc of alocacoesRes.rows) {
-        const salarioBase = mapSalarios.get(`${aloc.setor_id}-${aloc.cargo_id}`);
-        if (salarioBase !== undefined && salarioBase > 0) {
-          temAlocacaoValida = true;
-          custoTotalMaoDeObraCliente += parseFloat(aloc.total_horas_gastas_cargo) * (salarioBase / fatorHoras);
+        const valorHora = mapValorHoraCargo.get(aloc.cargo_id);
+        if (valorHora !== undefined && valorHora >= 0) {
+          // Nova lógica: CustoCargoCliente = Qtd Funcionários * Horas Gastas (por funcionário) * Valor Hora Cargo
+          custoTotalCliente += parseFloat(aloc.quantidade_funcionarios) * parseFloat(aloc.total_horas_gastas_cargo) * valorHora;
         } else {
-          warnings.push(`Cliente ID ${fatura.cliente_id} (Faturamento ID ${fatura.faturamento_id}): Salário não configurado ou inválido para Setor '${aloc.nome_setor}' e Cargo '${aloc.nome_cargo}' no mês ${mes_ano}. Esta alocação não será contabilizada no custo.`);
+          todosCargosTinhamValorHora = false;
+          warnings.push(`Cliente ID ${fatura.cliente_id} (Faturamento ID ${fatura.faturamento_id}): Valor hora/cargo não configurado ou inválido para o Cargo '${aloc.nome_cargo}' (ID: ${aloc.cargo_id}) no mês ${mes_ano}. Esta alocação específica não será contabilizada no custo.`);
         }
       }
       
-      if (!temAlocacaoValida && alocacoesRes.rows.length > 0) {
-        warnings.push(`Cliente ID ${fatura.cliente_id} (Faturamento ID ${fatura.faturamento_id}): Todas as alocações de esforço não puderam ser contabilizadas por falta de configuração de salário. Custo de mão de obra será R$0.00.`);
+      if (!todosCargosTinhamValorHora && alocacoesRes.rows.length > 0) {
+        // Adiciona um aviso mais geral se algum cargo não pôde ser calculado.
+        warnings.push(`Cliente ID ${fatura.cliente_id} (Faturamento ID ${fatura.faturamento_id}): Pelo menos uma alocação de esforço não pôde ser contabilizada devido à falta de configuração de valor/hora para o cargo. O custo total calculado para este cliente pode estar subestimado.`);
       }
 
+      custoTotalCliente = parseFloat(custoTotalCliente.toFixed(2));
 
-      custoTotalMaoDeObraCliente = parseFloat(custoTotalMaoDeObraCliente.toFixed(2));
-      const valorFaturamentoClienteMes = parseFloat(fatura.valor_faturamento);
-      const custoTotalBaseParaMargem = valorFaturamentoClienteMes + custoTotalMaoDeObraCliente;
-      const valorIdealComMargem = parseFloat((custoTotalBaseParaMargem * (1 + percentualMargem)).toFixed(2));
-
-      // 5. Buscar valor do contrato do mês anterior se for uma nova inserção
-      let valorContratoAtualAnterior = null;
+      // 4. Buscar valor do contrato do mês anterior se for uma nova inserção
+      let valorContratoAtualAnterior = null; // Será usado como fallback para valor_contrato_atual_cliente_input_gerente
       const mesAnterior = getPreviousMonthDate(mes_ano);
       
       const contratoAnteriorRes = await client.query(
@@ -154,65 +134,60 @@ router.post('/gerar-analise/:mes_ano', auth, checkPermissionGerencial, async (re
       }
 
       // 6. UPSERT da análise contratual
-      // No INSERT, se valorContratoAtualAnterior for null, ele será inserido como NULL.
-      // A lógica de diferenca_analise e status_alerta usará COALESCE para tratar esse NULL como 0 para o cálculo inicial.
-const upsertAnaliseQuery = `
-  INSERT INTO analises_contratuais_cliente (
-    faturamento_id, cliente_id, mes_ano_referencia, valor_faturamento_cliente_mes,
-    custo_total_mao_de_obra_calculado, custo_total_base_para_margem_calculado,
-    percentual_margem_lucro_aplicada, valor_ideal_calculado_com_margem,
-    data_analise_gerada, analise_realizada_por_usuario_id,
-    valor_contrato_atual_cliente_input_gerente, 
-    diferenca_analise, 
-    status_alerta
-  ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP, $9,
-    $10,
-    COALESCE($10, 0::numeric) - $8,
-    CASE 
-      WHEN COALESCE($10, 0::numeric) - $8 < 0 THEN 'REVISAR_CONTRATO' 
-      ELSE 'OK' 
-    END
-  )
-  ON CONFLICT (faturamento_id) DO UPDATE SET
-    cliente_id = EXCLUDED.cliente_id, 
-    mes_ano_referencia = EXCLUDED.mes_ano_referencia,
-    valor_faturamento_cliente_mes = EXCLUDED.valor_faturamento_cliente_mes,
-    custo_total_mao_de_obra_calculado = EXCLUDED.custo_total_mao_de_obra_calculado,
-    custo_total_base_para_margem_calculado = EXCLUDED.custo_total_base_para_margem_calculado,
-    percentual_margem_lucro_aplicada = EXCLUDED.percentual_margem_lucro_aplicada,
-    valor_ideal_calculado_com_margem = EXCLUDED.valor_ideal_calculado_com_margem,
-    data_analise_gerada = CURRENT_TIMESTAMP, 
-    analise_realizada_por_usuario_id = EXCLUDED.analise_realizada_por_usuario_id,
-    valor_contrato_atual_cliente_input_gerente = COALESCE(
-      analises_contratuais_cliente.valor_contrato_atual_cliente_input_gerente,
-      EXCLUDED.valor_contrato_atual_cliente_input_gerente
-    ),
-    diferenca_analise = COALESCE(
-      analises_contratuais_cliente.valor_contrato_atual_cliente_input_gerente,
-      EXCLUDED.valor_contrato_atual_cliente_input_gerente,
-      0::numeric
-    ) - EXCLUDED.valor_ideal_calculado_com_margem,
-    status_alerta = CASE 
-      WHEN COALESCE(
-        analises_contratuais_cliente.valor_contrato_atual_cliente_input_gerente,
-        EXCLUDED.valor_contrato_atual_cliente_input_gerente,
-        0::numeric
-      ) - EXCLUDED.valor_ideal_calculado_com_margem < 0 THEN 'REVISAR_CONTRATO' 
-      ELSE 'OK' 
-    END
-  RETURNING *;
-`;
-
+      // 6. UPSERT da análise contratual
+      const upsertAnaliseQuery = `
+        INSERT INTO analises_contratuais_cliente (
+          faturamento_id, cliente_id, mes_ano_referencia,
+          custo_total_mao_de_obra_calculado, -- Este é o novo CustoTotalCliente
+          data_analise_gerada, analise_realizada_por_usuario_id,
+          valor_contrato_atual_cliente_input_gerente, 
+          diferenca_analise, 
+          status_alerta
+        ) VALUES (
+          $1, $2, $3,                          -- faturamento_id, cliente_id, mes_ano_referencia
+          $4,                                  -- custoTotalCliente (para custo_total_mao_de_obra_calculado)
+          CURRENT_TIMESTAMP, $5,               -- data_analise_gerada, analise_realizada_por_usuario_id (userId)
+          $6,                                  -- valorContratoAtualAnterior (para valor_contrato_atual_cliente_input_gerente)
+          COALESCE($6, 0::numeric) - $4,       -- diferenca_analise: valorContratoAnteriorOuZero - custoTotalCliente
+          CASE                                 -- status_alerta
+              WHEN COALESCE($6, 0::numeric) - $4 < 0 THEN 'REVISAR_CONTRATO' 
+              ELSE 'OK' 
+          END
+        )
+        ON CONFLICT (faturamento_id) DO UPDATE SET
+          cliente_id = EXCLUDED.cliente_id, 
+          mes_ano_referencia = EXCLUDED.mes_ano_referencia,
+          custo_total_mao_de_obra_calculado = EXCLUDED.custo_total_mao_de_obra_calculado, -- Atualiza com o novo CustoTotalCliente
+          data_analise_gerada = CURRENT_TIMESTAMP, 
+          analise_realizada_por_usuario_id = EXCLUDED.analise_realizada_por_usuario_id,
+          valor_contrato_atual_cliente_input_gerente = COALESCE(
+            analises_contratuais_cliente.valor_contrato_atual_cliente_input_gerente, 
+            EXCLUDED.valor_contrato_atual_cliente_input_gerente
+          ),
+          diferenca_analise = COALESCE(
+            analises_contratuais_cliente.valor_contrato_atual_cliente_input_gerente, 
+            EXCLUDED.valor_contrato_atual_cliente_input_gerente, 
+            0::numeric
+          ) - EXCLUDED.custo_total_mao_de_obra_calculado,
+          status_alerta = CASE 
+            WHEN COALESCE(
+              analises_contratuais_cliente.valor_contrato_atual_cliente_input_gerente, 
+              EXCLUDED.valor_contrato_atual_cliente_input_gerente, 
+              0::numeric
+            ) - EXCLUDED.custo_total_mao_de_obra_calculado < 0 THEN 'REVISAR_CONTRATO' 
+            ELSE 'OK' 
+          END
+        RETURNING *;`;
         
-      const analiseResult = await client.query(upsertAnaliseQuery, [
-        fatura.faturamento_id, fatura.cliente_id, fatura.mes_ano_referencia, valorFaturamentoClienteMes,
-        custoTotalMaoDeObraCliente, custoTotalBaseParaMargem,
-        configGlobal.percentual_margem_lucro_desejada, // Armazena o percentual usado
-        valorIdealComMargem, 
-        userId,
-        valorContratoAtualAnterior // $10: Usado para o COALESCE no INSERT e no UPDATE
-      ]);
+      const params = [
+        fatura.faturamento_id,        // $1
+        fatura.cliente_id,            // $2
+        fatura.mes_ano_referencia,    // $3
+        custoTotalCliente,            // $4
+        userId,                       // $5
+        valorContratoAtualAnterior    // $6
+      ];
+      const analiseResult = await client.query(upsertAnaliseQuery, params);
       analisesProcessadas.push(analiseResult.rows[0]);
     }
 
@@ -256,11 +231,11 @@ router.get('/:mes_ano', auth, checkPermissionGerencial, async (req, res) => {
         cl.nome as nome_cliente, 
         cl.codigo as codigo_cliente,
         ac.mes_ano_referencia, 
-        ac.valor_faturamento_cliente_mes, 
-        ac.custo_total_mao_de_obra_calculado, 
-        ac.custo_total_base_para_margem_calculado, 
-        ac.percentual_margem_lucro_aplicada, 
-        ac.valor_ideal_calculado_com_margem,
+        -- ac.valor_faturamento_cliente_mes, -- Removida
+        ac.custo_total_mao_de_obra_calculado, -- Agora representa o CustoTotalCliente
+        -- ac.custo_total_base_para_margem_calculado, -- Removida
+        -- ac.percentual_margem_lucro_aplicada, -- Removida
+        -- ac.valor_ideal_calculado_com_margem, -- Removida (CustoTotalCliente está em custo_total_mao_de_obra_calculado)
         ac.valor_contrato_atual_cliente_input_gerente, 
         ac.diferenca_analise, 
         ac.status_alerta,
@@ -301,9 +276,9 @@ router.put('/:analise_id/valor-contrato-atual', auth, checkPermissionGerencial, 
   try {
     await client.query('BEGIN');
 
-    // Buscar a análise e seu valor ideal calculado
+    // Buscar a análise e seu custo_total_mao_de_obra_calculado (que agora é o CustoTotalCliente)
     const analiseRes = await client.query(
-        'SELECT id, valor_ideal_calculado_com_margem, cliente_id, mes_ano_referencia FROM analises_contratuais_cliente WHERE id = $1 FOR UPDATE', 
+        'SELECT id, custo_total_mao_de_obra_calculado, cliente_id, mes_ano_referencia FROM analises_contratuais_cliente WHERE id = $1 FOR UPDATE', 
         [analise_id]
     );
 
@@ -314,9 +289,17 @@ router.put('/:analise_id/valor-contrato-atual', auth, checkPermissionGerencial, 
     }
 
     const analiseExistente = analiseRes.rows[0];
-    const valorIdeal = parseFloat(analiseExistente.valor_ideal_calculado_com_margem);
+    // O campo 'custo_total_mao_de_obra_calculado' agora guarda o Custo Total do Cliente (que já inclui a margem)
+    const custoTotalClienteCalculado = parseFloat(analiseExistente.custo_total_mao_de_obra_calculado); 
+    
+    if (isNaN(custoTotalClienteCalculado)) {
+        await client.query('ROLLBACK');
+        logAction(userId, userEmail, 'ANALISE_VALOR_CONTRATO_UPDATE_FAILED', 'AnaliseContratual', analise_id, { error: 'Custo total cliente na análise é inválido ou não encontrado.' });
+        return res.status(500).json({ success: false, message: 'Erro ao processar análise: custo total do cliente inválido.' });
+    }
+
     const novoValorContrato = parseFloat(valor_contrato_atual);
-    const novaDiferenca = parseFloat((novoValorContrato - valorIdeal).toFixed(2));
+    const novaDiferenca = parseFloat((novoValorContrato - custoTotalClienteCalculado).toFixed(2));
     const novoStatusAlerta = novaDiferenca < 0 ? 'REVISAR_CONTRATO' : (novaDiferenca === 0 ? 'NEUTRO' : 'OK');
 
 

@@ -29,13 +29,14 @@ app.use('/ranking-mapia', require('./routes/rankingMapia'));
 app.use('/perguntas-semana', require('./routes/perguntasSemana'));
 
 // NOVAS ROTAS PARA ANALISE CONTRATUAL
-app.use('/cargos', require('./routes/cargosRoutes')); 
-// app.use('/faturamentos', require('./routes/faturamentos')); // Rota duplicada, já definida acima
-app.use('/setores', require('./routes/setoresRoutes'));
-app.use('/configuracao-analise', require('./routes/configuracaoAnaliseRoutes'));
-app.use('/alocacao-esforco', require('./routes/alocacaoEsforcoRoutes'));
-app.use('/analise-contratual', require('./routes/analiseContratualRoutes'));
-app.use('/associacoes', require('./routes/setorCargosRoutes')); // CORRIGIDO de '/setor-cargos' para '/associacoes'
+app.use('/cargos', require('./backend/routes/cargosRoutes')); 
+// app.use('/faturamentos', require('./routes/faturamentos')); // Rota duplicada, verificar se é do backend ou frontend
+app.use('/setores', require('./backend/routes/setoresRoutes'));
+// app.use('/configuracao-analise', require('./backend/routes/configuracaoAnaliseRoutes')); // Rota desativada devido à refatoração da lógica de análise contratual
+app.use('/alocacao-esforco', require('./backend/routes/alocacaoEsforcoRoutes'));
+app.use('/analise-contratual', require('./backend/routes/analiseContratualRoutes'));
+app.use('/associacoes', require('./backend/routes/setorCargosRoutes')); 
+app.use('/config-valores-hora-cargo', require('./backend/routes/configValoresHoraCargoRoutes')); // Nova rota
 
 // Health check
 app.get('/health', (req, res) => {
