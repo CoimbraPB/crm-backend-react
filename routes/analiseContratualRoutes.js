@@ -312,9 +312,9 @@ router.put('/:analise_id/valor-contrato-atual', auth, checkPermissionGerencial, 
         valor_contrato_atual_cliente_input_gerente = $1, 
         diferenca_analise = $2, 
         status_alerta = $3,
-        analise_realizada_por_usuario_id = $4, -- Quem fez a última modificação relevante (input do valor)
-        updated_by_user_id = $4,
-        updated_at = CURRENT_TIMESTAMP
+        analise_realizada_por_usuario_id = $4 -- Quem fez a última modificação relevante (input do valor)
+        -- updated_by_user_id = $4, -- Coluna não existe no schema atual
+        -- updated_at = CURRENT_TIMESTAMP -- Será atualizado pelo trigger do BD
       WHERE id = $5 
       RETURNING *;`;
       
