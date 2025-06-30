@@ -75,7 +75,7 @@ router.post('/gerar-analise/:mes_ano', auth, checkPermissionGerencial, async (re
     // 3. Buscar faturamentos do mês que possuem alocação de esforço
     const faturamentosDoMesRes = await client.query(
       `SELECT f.id as faturamento_id, f.cliente_id, f.mes_ano as mes_ano_referencia, f.valor_faturamento
-       FROM faturamentos f
+       FROM faturamentos f 
        WHERE f.mes_ano = $1 AND EXISTS (
          SELECT 1 FROM alocacao_esforco_cliente_cargo ae WHERE ae.faturamento_id = f.id
        )`,
@@ -100,9 +100,9 @@ router.post('/gerar-analise/:mes_ano', auth, checkPermissionGerencial, async (re
 
       if (alocacoesRes.rows.length === 0) {
         warnings.push(`Cliente ID ${fatura.cliente_id} (Faturamento ID ${fatura.faturamento_id}): Nenhuma alocação de esforço encontrada, pulando cálculo de custo de mão de obra.`);
-        continue;
+        continue; 
       }
-
+      
       let custoTotalMaoDeObraCliente = 0;
       let temAlocacaoValida = false;
 
@@ -115,7 +115,7 @@ router.post('/gerar-analise/:mes_ano', auth, checkPermissionGerencial, async (re
           warnings.push(`Cliente ID ${fatura.cliente_id} (Faturamento ID ${fatura.faturamento_id}): Salário não configurado ou inválido para Setor '${aloc.nome_setor}' e Cargo '${aloc.nome_cargo}' no mês ${mes_ano}. Esta alocação não será contabilizada no custo.`);
         }
       }
-
+      
       if (!temAlocacaoValida && alocacoesRes.rows.length > 0) {
         warnings.push(`Cliente ID ${fatura.cliente_id} (Faturamento ID ${fatura.faturamento_id}): Todas as alocações de esforço não puderam ser contabilizadas por falta de configuração de salário. Custo de mão de obra será R$0.00.`);
       }
@@ -129,10 +129,10 @@ router.post('/gerar-analise/:mes_ano', auth, checkPermissionGerencial, async (re
       // 5. Buscar valor do contrato do mês anterior se for uma nova inserção
       let valorContratoAtualAnterior = null;
       const mesAnterior = getPreviousMonthDate(mes_ano);
-
+      
       const contratoAnteriorRes = await client.query(
-        `SELECT valor_contrato_atual_cliente_input_gerente
-         FROM analises_contratuais_cliente
+        `SELECT valor_contrato_atual_cliente_input_gerente 
+         FROM analises_contratuais_cliente 
          WHERE cliente_id = $1 AND mes_ano_referencia = $2`,
         [fatura.cliente_id, mesAnterior]
       );
@@ -150,31 +150,31 @@ router.post('/gerar-analise/:mes_ano', auth, checkPermissionGerencial, async (re
           custo_total_mao_de_obra_calculado, custo_total_base_para_margem_calculado,
           percentual_margem_lucro_aplicada, valor_ideal_calculado_com_margem,
           data_analise_gerada, analise_realizada_por_usuario_id,
-          valor_contrato_atual_cliente_input_gerente,
-          diferenca_analise,
+          valor_contrato_atual_cliente_input_gerente, 
+          diferenca_analise, 
           status_alerta,
           created_by_user_id, updated_by_user_id
         ) VALUES (
             $1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP, $9,
             $10, -- valor_contrato_atual_cliente_input_gerente (pode ser null)
             COALESCE($10, 0) - $8, -- diferenca_analise
-            CASE
-                WHEN COALESCE($10, 0) - $8 < 0 THEN 'REVISAR_CONTRATO'
-                ELSE 'OK'
+            CASE 
+                WHEN COALESCE($10, 0) - $8 < 0 THEN 'REVISAR_CONTRATO' 
+                ELSE 'OK' 
             END, -- status_alerta
             $9, $9
         )
         ON CONFLICT (faturamento_id) DO UPDATE SET
-          cliente_id = EXCLUDED.cliente_id,
+          cliente_id = EXCLUDED.cliente_id, 
           mes_ano_referencia = EXCLUDED.mes_ano_referencia,
           valor_faturamento_cliente_mes = EXCLUDED.valor_faturamento_cliente_mes,
           custo_total_mao_de_obra_calculado = EXCLUDED.custo_total_mao_de_obra_calculado,
           custo_total_base_para_margem_calculado = EXCLUDED.custo_total_base_para_margem_calculado,
           percentual_margem_lucro_aplicada = EXCLUDED.percentual_margem_lucro_aplicada,
           valor_ideal_calculado_com_margem = EXCLUDED.valor_ideal_calculado_com_margem,
-          data_analise_gerada = CURRENT_TIMESTAMP,
+          data_analise_gerada = CURRENT_TIMESTAMP, 
           analise_realizada_por_usuario_id = EXCLUDED.analise_realizada_por_usuario_id,
-          -- Mantém o valor_contrato_atual_cliente_input_gerente existente no UPDATE,
+          -- Mantém o valor_contrato_atual_cliente_input_gerente existente no UPDATE, 
           -- ele só é alterado pela rota PUT específica.
           -- No entanto, se ele era NULL e o EXCLUDED.valor_contrato_atual_cliente_input_gerente (que veio do $10)
           -- tiver um valor (do mês anterior), usamos esse valor.
@@ -183,19 +183,19 @@ router.post('/gerar-analise/:mes_ano', auth, checkPermissionGerencial, async (re
             EXCLUDED.valor_contrato_atual_cliente_input_gerente -- valor do INSERT (que pode ser do mês anterior ou null)
           ),
           diferenca_analise = COALESCE(analises_contratuais_cliente.valor_contrato_atual_cliente_input_gerente, EXCLUDED.valor_contrato_atual_cliente_input_gerente, 0) - EXCLUDED.valor_ideal_calculado_com_margem,
-          status_alerta = CASE
-                            WHEN COALESCE(analises_contratuais_cliente.valor_contrato_atual_cliente_input_gerente, EXCLUDED.valor_contrato_atual_cliente_input_gerente, 0) - EXCLUDED.valor_ideal_calculado_com_margem < 0 THEN 'REVISAR_CONTRATO'
-                            ELSE 'OK'
-                          END,
-          updated_by_user_id = EXCLUDED.updated_by_user_id,
-          updated_at = CURRENT_TIMESTAMP
+          status_alerta = CASE 
+                            WHEN COALESCE(analises_contratuais_cliente.valor_contrato_atual_cliente_input_gerente, EXCLUDED.valor_contrato_atual_cliente_input_gerente, 0) - EXCLUDED.valor_ideal_calculado_com_margem < 0 THEN 'REVISAR_CONTRATO' 
+                            ELSE 'OK' 
+                          END
+          -- updated_by_user_id = EXCLUDED.updated_by_user_id, -- Removido temporariamente, coluna não existe
+          -- updated_at = CURRENT_TIMESTAMP -- Removido temporariamente, será tratado por trigger ou não existe
         RETURNING *;`;
-
+        
       const analiseResult = await client.query(upsertAnaliseQuery, [
         fatura.faturamento_id, fatura.cliente_id, fatura.mes_ano_referencia, valorFaturamentoClienteMes,
         custoTotalMaoDeObraCliente, custoTotalBaseParaMargem,
         configGlobal.percentual_margem_lucro_desejada, // Armazena o percentual usado
-        valorIdealComMargem,
+        valorIdealComMargem, 
         userId,
         valorContratoAtualAnterior // $10: Usado para o COALESCE no INSERT e no UPDATE
       ]);
@@ -204,18 +204,18 @@ router.post('/gerar-analise/:mes_ano', auth, checkPermissionGerencial, async (re
 
     await client.query('COMMIT');
     logAction(userId, userEmail, 'ANALISE_CONTRATUAL_GERADA', 'AnaliseContratual', null, { mes_ano, count: analisesProcessadas.length, warnings: warnings.length });
-
+    
     let responseMessage = `Análise para ${mes_ano} gerada/atualizada para ${analisesProcessadas.length} clientes.`;
     if (warnings.length > 0) {
         responseMessage += ` Atenção: ${warnings.length} alertas durante o processamento. Verifique os logs do servidor ou os detalhes da análise para mais informações.`;
     }
     // console.warn("Alertas da geração de análise:", warnings); // Log no servidor
 
-    res.status(200).json({
-        success: true,
-        message: responseMessage,
+    res.status(200).json({ 
+        success: true, 
+        message: responseMessage, 
         analises: analisesProcessadas,
-        warnings: warnings
+        warnings: warnings 
     });
 
   } catch (error) {
@@ -235,33 +235,33 @@ router.get('/:mes_ano', auth, checkPermissionGerencial, async (req, res) => {
 
   try {
     const query = `
-      SELECT
-        ac.id as analise_id,
-        ac.faturamento_id,
-        ac.cliente_id,
-        cl.nome as nome_cliente,
+      SELECT 
+        ac.id as analise_id, 
+        ac.faturamento_id, 
+        ac.cliente_id, 
+        cl.nome as nome_cliente, 
         cl.codigo as codigo_cliente,
-        ac.mes_ano_referencia,
-        ac.valor_faturamento_cliente_mes,
-        ac.custo_total_mao_de_obra_calculado,
-        ac.custo_total_base_para_margem_calculado,
-        ac.percentual_margem_lucro_aplicada,
+        ac.mes_ano_referencia, 
+        ac.valor_faturamento_cliente_mes, 
+        ac.custo_total_mao_de_obra_calculado, 
+        ac.custo_total_base_para_margem_calculado, 
+        ac.percentual_margem_lucro_aplicada, 
         ac.valor_ideal_calculado_com_margem,
-        ac.valor_contrato_atual_cliente_input_gerente,
-        ac.diferenca_analise,
+        ac.valor_contrato_atual_cliente_input_gerente, 
+        ac.diferenca_analise, 
         ac.status_alerta,
-        ac.data_analise_gerada,
-        u.nome as nome_usuario_analise,
-        uc.nome as nome_usuario_criacao,
-        uu.nome as nome_usuario_atualizacao,
-        ac.created_at,
-        ac.updated_at
+        ac.data_analise_gerada, 
+        u.nome as nome_usuario_analise
+        -- uc.nome as nome_usuario_criacao, -- Removido temporariamente
+        -- uu.nome as nome_usuario_atualizacao, -- Removido temporariamente
+        -- ac.created_at, -- Removido temporariamente
+        -- ac.updated_at -- Removido temporariamente
       FROM analises_contratuais_cliente ac
       JOIN clientes cl ON ac.cliente_id = cl.id
       LEFT JOIN usuarios u ON ac.analise_realizada_por_usuario_id = u.id
-      LEFT JOIN usuarios uc ON ac.created_by_user_id = uc.id
-      LEFT JOIN usuarios uu ON ac.updated_by_user_id = uu.id
-      WHERE ac.mes_ano_referencia = $1
+      -- LEFT JOIN usuarios uc ON ac.created_by_user_id = uc.id -- Removido temporariamente
+      -- LEFT JOIN usuarios uu ON ac.updated_by_user_id = uu.id -- Removido temporariamente
+      WHERE ac.mes_ano_referencia = $1 
       ORDER BY cl.nome ASC;`;
     const result = await pool.query(query, [mes_ano]);
     res.json({ success: true, analises: result.rows });
@@ -289,7 +289,7 @@ router.put('/:analise_id/valor-contrato-atual', auth, checkPermissionGerencial, 
 
     // Buscar a análise e seu valor ideal calculado
     const analiseRes = await client.query(
-        'SELECT id, valor_ideal_calculado_com_margem, cliente_id, mes_ano_referencia FROM analises_contratuais_cliente WHERE id = $1 FOR UPDATE',
+        'SELECT id, valor_ideal_calculado_com_margem, cliente_id, mes_ano_referencia FROM analises_contratuais_cliente WHERE id = $1 FOR UPDATE', 
         [analise_id]
     );
 
@@ -307,22 +307,22 @@ router.put('/:analise_id/valor-contrato-atual', auth, checkPermissionGerencial, 
 
 
     const updateQuery = `
-      UPDATE analises_contratuais_cliente
-      SET
-        valor_contrato_atual_cliente_input_gerente = $1,
-        diferenca_analise = $2,
+      UPDATE analises_contratuais_cliente 
+      SET 
+        valor_contrato_atual_cliente_input_gerente = $1, 
+        diferenca_analise = $2, 
         status_alerta = $3,
         analise_realizada_por_usuario_id = $4, -- Quem fez a última modificação relevante (input do valor)
         updated_by_user_id = $4,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $5
+      WHERE id = $5 
       RETURNING *;`;
-
+      
     const result = await client.query(updateQuery, [
-        novoValorContrato,
-        novaDiferenca,
-        novoStatusAlerta,
-        userId,
+        novoValorContrato, 
+        novaDiferenca, 
+        novoStatusAlerta, 
+        userId, 
         analise_id
     ]);
 
