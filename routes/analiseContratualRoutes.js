@@ -41,6 +41,10 @@ router.post('/gerar-analise/:mes_ano', auth, checkPermissionGerencial, async (re
     const mapSalarios = new Map();
     salariosRes.rows.forEach(s => mapSalarios.set(`${s.setor_id}-${s.cargo_id}`, parseFloat(s.salario_mensal_base)));
 
+    if (mapSalarios.size === 0) {
+        console.warn(`Nenhuma configuração de salário encontrada para ${mes_ano} em configuracoes_salario_cargo_mensal. Custos de mão de obra podem ser zero.`);
+    }
+
     const faturamentosDoMesRes = await client.query(
       `SELECT f.id as faturamento_id, f.cliente_id, f.mes_ano as mes_ano_referencia, f.valor_faturamento
        FROM faturamentos f WHERE f.mes_ano = $1 AND EXISTS (
@@ -64,7 +68,7 @@ router.post('/gerar-analise/:mes_ano', auth, checkPermissionGerencial, async (re
         if (salarioBase && fatorHoras > 0) {
           custoTotalMaoDeObraCliente += parseFloat(aloc.total_horas_gastas_cargo) * (salarioBase / fatorHoras);
         } else {
-          console.warn(`Salário não configurado para setor ${aloc.setor_id}, cargo ${aloc.cargo_id} no mês ${mes_ano}.`);
+          console.warn(`Salário não configurado para setor ${aloc.setor_id}, cargo ${aloc.cargo_id} no mês ${mes_ano} para faturamento ${fatura.faturamento_id}.`);
         }
       }
       custoTotalMaoDeObraCliente = parseFloat(custoTotalMaoDeObraCliente.toFixed(2));
@@ -72,33 +76,78 @@ router.post('/gerar-analise/:mes_ano', auth, checkPermissionGerencial, async (re
       const custoTotalBaseParaMargem = valorFaturamentoClienteMes + custoTotalMaoDeObraCliente;
       const valorIdealComMargem = parseFloat((custoTotalBaseParaMargem * (1 + percentualMargem)).toFixed(2));
 
+      // --- INÍCIO DA LÓGICA PARA VALOR DO CONTRATO ATUAL (PUXAR DO MÊS ANTERIOR E PRESERVAR INPUT ATUAL) ---
+      let valorContratoParaPopular = null; 
+
+      const analiseCorrenteRes = await client.query(
+        'SELECT valor_contrato_atual_cliente_input_gerente FROM analises_contratuais_cliente WHERE faturamento_id = $1',
+        [fatura.faturamento_id]
+      );
+
+      if (analiseCorrenteRes.rows.length > 0 && analiseCorrenteRes.rows[0].valor_contrato_atual_cliente_input_gerente !== null) {
+        valorContratoParaPopular = parseFloat(analiseCorrenteRes.rows[0].valor_contrato_atual_cliente_input_gerente);
+      } else {
+        const dataMesCorrenteObj = new Date(fatura.mes_ano_referencia.getTime());
+        dataMesCorrenteObj.setUTCMonth(dataMesCorrenteObj.getUTCMonth() - 1);
+        const mesAnoAnteriorString = `${dataMesCorrenteObj.getUTCFullYear()}-${String(dataMesCorrenteObj.getUTCMonth() + 1).padStart(2, '0')}-01`;
+
+        const analiseAnteriorRes = await client.query(
+          `SELECT valor_contrato_atual_cliente_input_gerente 
+           FROM analises_contratuais_cliente
+           WHERE cliente_id = $1 AND mes_ano_referencia = $2`,
+          [fatura.cliente_id, mesAnoAnteriorString]
+        );
+
+        if (analiseAnteriorRes.rows.length > 0 && analiseAnteriorRes.rows[0].valor_contrato_atual_cliente_input_gerente !== null) {
+          valorContratoParaPopular = parseFloat(analiseAnteriorRes.rows[0].valor_contrato_atual_cliente_input_gerente);
+        }
+      }
+      // --- FIM DA LÓGICA PARA VALOR DO CONTRATO ATUAL ---
+      
+      const diferencaParaPopular = valorContratoParaPopular !== null ? parseFloat((valorContratoParaPopular - valorIdealComMargem).toFixed(2)) : null;
+      const statusAlertaParaPopular = diferencaParaPopular !== null ? (diferencaParaPopular < 0 ? 'REVISAR_CONTRATO' : 'OK') : null;
+      
       const upsertAnaliseQuery = `
         INSERT INTO analises_contratuais_cliente (
           faturamento_id, cliente_id, mes_ano_referencia, valor_faturamento_cliente_mes,
           custo_total_mao_de_obra_calculado, custo_total_base_para_margem_calculado,
           percentual_margem_lucro_aplicada, valor_ideal_calculado_com_margem,
           data_analise_gerada, analise_realizada_por_usuario_id,
-          valor_contrato_atual_cliente_input_gerente, diferenca_analise, status_alerta
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP, $9, 
-                  (SELECT acc_ant.valor_contrato_atual_cliente_input_gerente FROM analises_contratuais_cliente acc_ant WHERE acc_ant.faturamento_id = $1), 
-                  (SELECT acc_ant.diferenca_analise FROM analises_contratuais_cliente acc_ant WHERE acc_ant.faturamento_id = $1),
-                  (SELECT acc_ant.status_alerta FROM analises_contratuais_cliente acc_ant WHERE acc_ant.faturamento_id = $1)
-        )
+          valor_contrato_atual_cliente_input_gerente, 
+          diferenca_analise, 
+          status_alerta
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP, $9, $10, $11, $12)
         ON CONFLICT (faturamento_id) DO UPDATE SET
-          cliente_id = EXCLUDED.cliente_id, mes_ano_referencia = EXCLUDED.mes_ano_referencia,
+          cliente_id = EXCLUDED.cliente_id, 
+          mes_ano_referencia = EXCLUDED.mes_ano_referencia,
           valor_faturamento_cliente_mes = EXCLUDED.valor_faturamento_cliente_mes,
           custo_total_mao_de_obra_calculado = EXCLUDED.custo_total_mao_de_obra_calculado,
           custo_total_base_para_margem_calculado = EXCLUDED.custo_total_base_para_margem_calculado,
           percentual_margem_lucro_aplicada = EXCLUDED.percentual_margem_lucro_aplicada,
           valor_ideal_calculado_com_margem = EXCLUDED.valor_ideal_calculado_com_margem,
-          data_analise_gerada = CURRENT_TIMESTAMP, analise_realizada_por_usuario_id = EXCLUDED.analise_realizada_por_usuario_id,
-          diferenca_analise = COALESCE(analises_contratuais_cliente.valor_contrato_atual_cliente_input_gerente, 0) - EXCLUDED.valor_ideal_calculado_com_margem,
-          status_alerta = CASE WHEN COALESCE(analises_contratuais_cliente.valor_contrato_atual_cliente_input_gerente, 0) - EXCLUDED.valor_ideal_calculado_com_margem < 0 THEN 'REVISAR_CONTRATO' ELSE 'OK' END
+          data_analise_gerada = CURRENT_TIMESTAMP, 
+          analise_realizada_por_usuario_id = EXCLUDED.analise_realizada_por_usuario_id,
+          valor_contrato_atual_cliente_input_gerente = COALESCE(analises_contratuais_cliente.valor_contrato_atual_cliente_input_gerente, EXCLUDED.valor_contrato_atual_cliente_input_gerente),
+          diferenca_analise = COALESCE(analises_contratuais_cliente.valor_contrato_atual_cliente_input_gerente, EXCLUDED.valor_contrato_atual_cliente_input_gerente, 0) - EXCLUDED.valor_ideal_calculado_com_margem,
+          status_alerta = CASE 
+                            WHEN COALESCE(analises_contratuais_cliente.valor_contrato_atual_cliente_input_gerente, EXCLUDED.valor_contrato_atual_cliente_input_gerente, 0) - EXCLUDED.valor_ideal_calculado_com_margem < 0 THEN 'REVISAR_CONTRATO'
+                            ELSE 'OK' 
+                          END
         RETURNING *;`;
+        
       const analiseResult = await client.query(upsertAnaliseQuery, [
-        fatura.faturamento_id, fatura.cliente_id, fatura.mes_ano_referencia, valorFaturamentoClienteMes,
-        custoTotalMaoDeObraCliente, custoTotalBaseParaMargem,
-        configGlobal.percentual_margem_lucro_desejada, valorIdealComMargem, userId
+        fatura.faturamento_id,                            // $1
+        fatura.cliente_id,                              // $2
+        fatura.mes_ano_referencia,                      // $3
+        valorFaturamentoClienteMes,                     // $4
+        custoTotalMaoDeObraCliente,                     // $5
+        custoTotalBaseParaMargem,                       // $6
+        configGlobal.percentual_margem_lucro_desejada,    // $7
+        valorIdealComMargem,                            // $8
+        userId,                                         // $9
+        valorContratoParaPopular,                       // $10
+        diferencaParaPopular,                           // $11
+        statusAlertaParaPopular                         // $12
       ]);
       analisesProcessadas.push(analiseResult.rows[0]);
     }
@@ -107,7 +156,7 @@ router.post('/gerar-analise/:mes_ano', auth, checkPermissionGerencial, async (re
     res.status(200).json({ success: true, message: `Análise para ${mes_ano} gerada/atualizada para ${analisesProcessadas.length} clientes.`, analises: analisesProcessadas });
   } catch (error) {
     await client.query('ROLLBACK');
-    console.error(`Erro POST /analise-contratual/gerar-analise/${mes_ano}:`, error);
+    console.error(`Erro POST /analise-contratual/gerar-analise/${mes_ano}:`, error); 
     logAction(userId, userEmail, 'ANALISE_CONTRATUAL_GERAR_FAILED', 'AnaliseContratual', null, { mes_ano, error: error.message });
     res.status(500).json({ success: false, message: 'Erro ao gerar análise.' });
   } finally {
