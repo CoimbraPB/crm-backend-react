@@ -156,52 +156,53 @@ router.post('/gerar-analise/:mes_ano', auth, checkPermissionGerencial, async (re
       // 6. UPSERT da análise contratual
       // No INSERT, se valorContratoAtualAnterior for null, ele será inserido como NULL.
       // A lógica de diferenca_analise e status_alerta usará COALESCE para tratar esse NULL como 0 para o cálculo inicial.
-      const upsertAnaliseQuery = `
-        INSERT INTO analises_contratuais_cliente (
-          faturamento_id, cliente_id, mes_ano_referencia, valor_faturamento_cliente_mes,
-          custo_total_mao_de_obra_calculado, custo_total_base_para_margem_calculado,
-          percentual_margem_lucro_aplicada, valor_ideal_calculado_com_margem,
-          data_analise_gerada, analise_realizada_por_usuario_id,
-          valor_contrato_atual_cliente_input_gerente, 
-          diferenca_analise, 
-          status_alerta,
-          created_by_user_id, updated_by_user_id
-        ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP, $9,
-            $10, -- valor_contrato_atual_cliente_input_gerente (pode ser null)
-            COALESCE($10, 0) - $8, -- diferenca_analise
-            CASE 
-                WHEN COALESCE($10, 0) - $8 < 0 THEN 'REVISAR_CONTRATO' 
-                ELSE 'OK' 
-            END, -- status_alerta
-            $9, $9
-        )
-        ON CONFLICT (faturamento_id) DO UPDATE SET
-          cliente_id = EXCLUDED.cliente_id, 
-          mes_ano_referencia = EXCLUDED.mes_ano_referencia,
-          valor_faturamento_cliente_mes = EXCLUDED.valor_faturamento_cliente_mes,
-          custo_total_mao_de_obra_calculado = EXCLUDED.custo_total_mao_de_obra_calculado,
-          custo_total_base_para_margem_calculado = EXCLUDED.custo_total_base_para_margem_calculado,
-          percentual_margem_lucro_aplicada = EXCLUDED.percentual_margem_lucro_aplicada,
-          valor_ideal_calculado_com_margem = EXCLUDED.valor_ideal_calculado_com_margem,
-          data_analise_gerada = CURRENT_TIMESTAMP, 
-          analise_realizada_por_usuario_id = EXCLUDED.analise_realizada_por_usuario_id,
-          -- Mantém o valor_contrato_atual_cliente_input_gerente existente no UPDATE, 
-          -- ele só é alterado pela rota PUT específica.
-          -- No entanto, se ele era NULL e o EXCLUDED.valor_contrato_atual_cliente_input_gerente (que veio do $10)
-          -- tiver um valor (do mês anterior), usamos esse valor.
-          valor_contrato_atual_cliente_input_gerente = COALESCE(
-            analises_contratuais_cliente.valor_contrato_atual_cliente_input_gerente, -- valor já existente na tabela para este faturamento_id
-            EXCLUDED.valor_contrato_atual_cliente_input_gerente -- valor do INSERT (que pode ser do mês anterior ou null)
-          ),
-          diferenca_analise = COALESCE(analises_contratuais_cliente.valor_contrato_atual_cliente_input_gerente, EXCLUDED.valor_contrato_atual_cliente_input_gerente, 0) - EXCLUDED.valor_ideal_calculado_com_margem,
-          status_alerta = CASE 
-                            WHEN COALESCE(analises_contratuais_cliente.valor_contrato_atual_cliente_input_gerente, EXCLUDED.valor_contrato_atual_cliente_input_gerente, 0) - EXCLUDED.valor_ideal_calculado_com_margem < 0 THEN 'REVISAR_CONTRATO' 
-                            ELSE 'OK' 
-                          END
-          -- updated_by_user_id = EXCLUDED.updated_by_user_id, -- Removido temporariamente, coluna não existe
-          -- updated_at = CURRENT_TIMESTAMP -- Removido temporariamente, será tratado por trigger ou não existe
-        RETURNING *;`;
+const upsertAnaliseQuery = `
+  INSERT INTO analises_contratuais_cliente (
+    faturamento_id, cliente_id, mes_ano_referencia, valor_faturamento_cliente_mes,
+    custo_total_mao_de_obra_calculado, custo_total_base_para_margem_calculado,
+    percentual_margem_lucro_aplicada, valor_ideal_calculado_com_margem,
+    data_analise_gerada, analise_realizada_por_usuario_id,
+    valor_contrato_atual_cliente_input_gerente, 
+    diferenca_analise, 
+    status_alerta
+  ) VALUES (
+    $1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP, $9,
+    $10,
+    COALESCE($10, 0) - $8,
+    CASE 
+      WHEN COALESCE($10, 0) - $8 < 0 THEN 'REVISAR_CONTRATO' 
+      ELSE 'OK' 
+    END
+  )
+  ON CONFLICT (faturamento_id) DO UPDATE SET
+    cliente_id = EXCLUDED.cliente_id, 
+    mes_ano_referencia = EXCLUDED.mes_ano_referencia,
+    valor_faturamento_cliente_mes = EXCLUDED.valor_faturamento_cliente_mes,
+    custo_total_mao_de_obra_calculado = EXCLUDED.custo_total_mao_de_obra_calculado,
+    custo_total_base_para_margem_calculado = EXCLUDED.custo_total_base_para_margem_calculado,
+    percentual_margem_lucro_aplicada = EXCLUDED.percentual_margem_lucro_aplicada,
+    valor_ideal_calculado_com_margem = EXCLUDED.valor_ideal_calculado_com_margem,
+    data_analise_gerada = CURRENT_TIMESTAMP, 
+    analise_realizada_por_usuario_id = EXCLUDED.analise_realizada_por_usuario_id,
+    valor_contrato_atual_cliente_input_gerente = COALESCE(
+      analises_contratuais_cliente.valor_contrato_atual_cliente_input_gerente,
+      EXCLUDED.valor_contrato_atual_cliente_input_gerente
+    ),
+    diferenca_analise = COALESCE(
+      analises_contratuais_cliente.valor_contrato_atual_cliente_input_gerente,
+      EXCLUDED.valor_contrato_atual_cliente_input_gerente,
+      0
+    ) - EXCLUDED.valor_ideal_calculado_com_margem,
+    status_alerta = CASE 
+      WHEN COALESCE(
+        analises_contratuais_cliente.valor_contrato_atual_cliente_input_gerente,
+        EXCLUDED.valor_contrato_atual_cliente_input_gerente,
+        0
+      ) - EXCLUDED.valor_ideal_calculado_com_margem < 0 THEN 'REVISAR_CONTRATO' 
+      ELSE 'OK' 
+    END
+  RETURNING *;
+`;
         
       const analiseResult = await client.query(upsertAnaliseQuery, [
         fatura.faturamento_id, fatura.cliente_id, fatura.mes_ano_referencia, valorFaturamentoClienteMes,
