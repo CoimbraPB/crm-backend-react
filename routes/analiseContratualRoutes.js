@@ -16,7 +16,19 @@ const checkPermissionGerencial = (req, res, next) => {
 
 // Função auxiliar para obter o primeiro dia do mês anterior
 const getPreviousMonthDate = (currentMesAno) => {
-  const currentDate = new Date(currentMesAno + '-01T00:00:00Z'); // Assegura que é UTC para evitar problemas de fuso
+  // currentMesAno é esperado no formato "YYYY-MM-DD"
+  // Adiciona 'T00:00:00Z' para garantir que seja interpretado como UTC meia-noite
+  const currentDate = new Date(currentMesAno + 'T00:00:00Z'); 
+  if (isNaN(currentDate.getTime())) {
+    // Se a data for inválida por algum motivo, retorna null ou lança um erro mais específico
+    // Isso pode acontecer se currentMesAno não estiver no formato esperado.
+    console.error(`getPreviousMonthDate: Invalid date constructed from input: ${currentMesAno}`);
+    // Para este caso, vamos retornar uma string que provavelmente causará falha na query SQL,
+    // ou poderia lançar um erro para ser pego pelo try...catch da rota.
+    // Retornar null pode fazer a query buscar por mes_ano_referencia = NULL, o que não é ideal.
+    // Uma string obviamente inválida para data SQL é mais segura para debug.
+    return 'INVALID_DATE_INPUT'; 
+  }
   currentDate.setUTCMonth(currentDate.getUTCMonth() - 1);
   return currentDate.toISOString().split('T')[0]; // Formato YYYY-MM-DD
 };
