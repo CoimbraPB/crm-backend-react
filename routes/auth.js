@@ -1,3 +1,8 @@
+const express = require('express');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const pool = require('../config/database'); // Ajuste o caminho se o seu config estiver em outro lugar
+const auth = require('../middleware/auth'); // Ajuste o caminho se o seu middleware estiver em outro lugar
 const { logAction, ACTION_TYPES, ENTITY_TYPES } = require('../services/auditLogService'); // Ajuste o caminho se necessário
 
 const router = express.Router();
