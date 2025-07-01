@@ -6,7 +6,7 @@ const { logAction } = require('../services/auditLogService');
 
 const checkPermissionGerencial = (req, res, next) => {
   const userPermission = req.user.permissao;
-  if (['Gerente', 'Dev', 'Gestor'].includes(userPermission)) { // Adicionado Gestor conforme discussão anterior
+  if (['Gerente', 'Dev'].includes(userPermission)) { 
     next();
   } else {
     logAction(req.user.userId, req.user.email, 'ANALISE_CONTRATUAL_ACCESS_DENIED', 'AnaliseContratual', null, { route: req.path, attemptedPermission: userPermission });

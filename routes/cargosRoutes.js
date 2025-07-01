@@ -18,7 +18,7 @@ const checkPermission = (allowedRoles) => {
 };
 
 const PERMISSOES_GERENCIAIS = ['Gerente', 'Dev']; 
-const PERMISSOES_VISUALIZACAO = ['Gerente', 'Dev', 'Gestor', 'Fiscal', 'Operador'];
+const PERMISSOES_VISUALIZACAO = ['Gerente', 'Dev'];
 
 // ROTA: Listar todos os cargos ativos
 router.get('/', auth, checkPermission(PERMISSOES_VISUALIZACAO), async (req, res) => {

@@ -18,7 +18,7 @@ const checkPermissionGerenteDev = (req, res, next) => {
 // Middleware de permissão para Gerente, Dev ou Gestor (para leitura)
 const checkPermissionLeitura = (req, res, next) => {
   const userPermission = req.user.permissao;
-  if (['Gerente', 'Dev', 'Gestor'].includes(userPermission)) {
+  if (['Gerente', 'Dev'].includes(userPermission)) {
     next();
   } else {
     logAction(req.user.userId, req.user.email, 'CONFIG_VALOR_HORA_READ_ACCESS_DENIED', 'ConfigValoresHoraCargo', null, { route: req.path, attemptedPermission: userPermission });
