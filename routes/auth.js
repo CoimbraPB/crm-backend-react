@@ -1,8 +1,4 @@
-const express = require('express');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const pool = require('../config/database');
-const auth = require('../middleware/auth');
+const { logAction, ACTION_TYPES, ENTITY_TYPES } = require('../services/auditLogService'); // Ajuste o caminho se necessário
 
 const router = express.Router();
 
@@ -47,16 +43,16 @@ router.post('/login', async (req, res) => {
     }
 
     // Gerar token JWT
-  const token = jwt.sign(
-    { 
-      userId: user.id,
-      email: user.email,
-      nome: user.nome, // <= adicionar aqui
-      permissao: user.permissao
-    },
-    process.env.JWT_SECRET,
-    { expiresIn: '24h' }
-  );
+    const token = jwt.sign(
+      { 
+        userId: user.id,
+        email: user.email,
+        nome: user.nome,
+        permissao: user.permissao
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
 
     // Remover senha da resposta
     const { senha: _, ...userWithoutPassword } = user;
@@ -64,7 +60,6 @@ router.post('/login', async (req, res) => {
     console.log('Login successful for user:', user.email);
 
     // Audit log for successful login
-    const { logAction, ACTION_TYPES, ENTITY_TYPES } = require('../services/auditLogService');
     await logAction(user.id, user.email, ACTION_TYPES.USER_LOGIN_SUCCESS, ENTITY_TYPES.USER, user.id);
 
     res.json({
@@ -75,13 +70,6 @@ router.post('/login', async (req, res) => {
 
   } catch (error) {
     console.error('Erro no login:', error);
-    // Optional: Log failed login attempt if you have user information at this stage
-    // For example, if email was valid but password was wrong.
-    // const { email } = req.body;
-    // if (email) {
-    //   const { logAction, ACTION_TYPES, ENTITY_TYPES } = require('../services/auditLogService');
-    //   await logAction(null, email, ACTION_TYPES.USER_LOGIN_FAILED, ENTITY_TYPES.USER, null, { error: 'Invalid credentials' });
-    // }
     res.status(500).json({
       success: false,
       message: 'Erro interno do servidor'
@@ -117,5 +105,90 @@ router.get('/verify', auth, async (req, res) => {
     });
   }
 });
+
+// NOVO ENDPOINT: Alterar Senha (sem autenticação prévia, mas validando senha antiga)
+router.post('/change-password-unauthenticated', async (req, res) => {
+  try {
+    const { email, oldPassword, newPassword } = req.body;
+
+    // Validação de entrada básica
+    if (!email || !oldPassword || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email, senha antiga e nova senha são obrigatórios.'
+      });
+    }
+
+    if (newPassword.length < 6) {
+        return res.status(400).json({
+            success: false,
+            message: 'Nova senha deve ter pelo menos 6 caracteres.'
+        });
+    }
+
+    // Buscar usuário no banco
+    const userResult = await pool.query(
+      'SELECT * FROM usuarios WHERE email = $1',
+      [email]
+    );
+
+    if (userResult.rows.length === 0) {
+      // Mensagem genérica para não revelar se o e-mail existe ou não,
+      // ou se a senha antiga estava incorreta.
+      return res.status(401).json({
+        success: false,
+        message: 'E-mail ou senha atual incorreta. Verifique os dados e tente novamente.'
+      });
+    }
+
+    const user = userResult.rows[0];
+
+    // Verificar senha antiga
+    const senhaAntigaCorreta = await bcrypt.compare(oldPassword, user.senha);
+    if (!senhaAntigaCorreta) {
+      // Mesma mensagem genérica
+      return res.status(401).json({
+        success: false,
+        message: 'E-mail ou senha atual incorreta. Verifique os dados e tente novamente.'
+      });
+    }
+
+    // Gerar hash da nova senha
+    const salt = await bcrypt.genSalt(10); // Recomenda-se que o número de rounds seja configurável
+    const hashedNewPassword = await bcrypt.hash(newPassword, salt);
+
+    // Atualizar senha no banco
+    await pool.query(
+      'UPDATE usuarios SET senha = $1 WHERE id = $2',
+      [hashedNewPassword, user.id]
+    );
+
+    // Audit log
+    await logAction(
+        user.id, 
+        user.email, 
+        ACTION_TYPES.USER_PASSWORD_UPDATED, 
+        ENTITY_TYPES.USER, 
+        user.id, 
+        { method: 'change-password-unauthenticated' } // Detalhe adicional
+    );
+
+    res.json({
+      success: true,
+      message: 'Senha alterada com sucesso.'
+    });
+
+  } catch (error) {
+    console.error('Erro ao alterar senha (unauthenticated):', error);
+    // Considerar logar o erro no audit log como SYSTEM_ERROR, se apropriado,
+    // mas cuidado para não expor informações sensíveis do erro no log.
+    // Exemplo: await logAction(null, req.body.email || 'unknown', ACTION_TYPES.SYSTEM_ERROR, ENTITY_TYPES.SYSTEM, null, { context: 'change-password-unauthenticated', errorMessage: error.message });
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno do servidor ao tentar alterar a senha.'
+    });
+  }
+});
+
 
 module.exports = router;
