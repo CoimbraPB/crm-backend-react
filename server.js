@@ -39,7 +39,7 @@ app.use('/associacoes', require('./routes/setorCargosRoutes'));
 app.use('/config-valores-hora-cargo', require('./routes/configValoresHoraCargoRoutes')); // Nova rota
 
 // NOVAS ROTAS PARA CONTATOS SOCIETÁRIOS
-
+app.use('/contatos-societarios', require('./routes/contatosSocietariosRoutes'));
 
 // Health check
 app.get('/health', (req, res) => {
