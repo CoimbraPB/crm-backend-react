@@ -1,7 +1,7 @@
 const express = require('express');
-const pool = require('../config/database'); // Ajuste o caminho se necessário
-const auth = require('../middleware/auth'); // Ajuste o caminho se necessário
-const { logAction, ACTION_TYPES, ENTITY_TYPES } = require('../services/auditLogService'); // Ajuste o caminho se necessário
+const pool = require('../config/database');
+const auth = require('../middleware/auth');
+const { logAction, ACTION_TYPES, ENTITY_TYPES } = require('../services/auditLogService');
 
 const router = express.Router();
 
@@ -30,6 +30,8 @@ router.get('/cliente/:cliente_id', auth, async (req, res) => {
       [cliente_id]
     );
     if (result.rows.length === 0) {
+      // Retorna sucesso com array vazio se não houver contatos para o cliente,
+      // o que é um cenário válido, não necessariamente um erro 404 para a rota em si.
       return res.json({ success: true, contatos: [] });
     }
     res.json({ success: true, contatos: result.rows });
@@ -48,29 +50,33 @@ router.post('/', auth, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Todos os campos são obrigatórios.' });
     }
     
+    // TODO: Adicionar validação mais robusta para CPF, email e data
+
     const result = await pool.query(
       'INSERT INTO contatos_societarios (cliente_id, nome, email, cpf, data_nascimento, cargo) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
       [cliente_id, nome, email, cpf, data_nascimento, cargo]
     );
     const novoContato = result.rows[0];
 
+    // Log de auditoria
     await logAction(
-      req.user.userId, 
+      req.user.userId, // Ou req.user.id dependendo da sua estrutura de user no token
       req.user.email,
       ACTION_TYPES.CREATE,
       ENTITY_TYPES.CONTATO_SOCIETARIO,
       novoContato.id,
-      { cliente_id, nome, email }
+      { cliente_id, nome, email } // Detalhes relevantes
     );
 
     res.status(201).json({ success: true, message: 'Contato societário criado com sucesso!', contato: novoContato });
   } catch (error) {
     console.error('Erro ao criar contato societário:', error);
-    if (error.code === '23505') { 
+    // Verificar erro de chave única para CPF, por exemplo
+    if (error.code === '23505') { // Código de erro do PostgreSQL para unique_violation
         if (error.constraint && error.constraint.includes('cpf')) {
              return res.status(409).json({ success: false, message: 'CPF já cadastrado para outro contato.', error: error.message });
         }
-         if (error.constraint && error.constraint.includes('email')) { 
+         if (error.constraint && error.constraint.includes('email')) { // Supondo que email também possa ser único por cliente
              return res.status(409).json({ success: false, message: 'E-mail já cadastrado para outro contato neste cliente.', error: error.message });
         }
     }
@@ -82,11 +88,13 @@ router.post('/', auth, async (req, res) => {
 router.put('/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
-    const { nome, email, cpf, data_nascimento, cargo } = req.body;
+    const { nome, email, cpf, data_nascimento, cargo } = req.body; // cliente_id não é atualizável por aqui
 
     if (!nome || !email || !cpf || !data_nascimento || !cargo) {
       return res.status(400).json({ success: false, message: 'Todos os campos são obrigatórios para atualização.' });
     }
+
+    // TODO: Adicionar validação mais robusta
 
     const result = await pool.query(
       'UPDATE contatos_societarios SET nome = $1, email = $2, cpf = $3, data_nascimento = $4, cargo = $5, updated_at = CURRENT_TIMESTAMP WHERE id = $6 RETURNING *',
@@ -98,13 +106,14 @@ router.put('/:id', auth, async (req, res) => {
     }
     const contatoAtualizado = result.rows[0];
 
+    // Log de auditoria
     await logAction(
       req.user.userId,
       req.user.email,
       ACTION_TYPES.UPDATE,
       ENTITY_TYPES.CONTATO_SOCIETARIO,
       contatoAtualizado.id,
-      { nome, email }
+      { nome, email } // Detalhes relevantes da atualização
     );
 
     res.json({ success: true, message: 'Contato societário atualizado com sucesso!', contato: contatoAtualizado });
@@ -134,13 +143,14 @@ router.delete('/:id', auth, async (req, res) => {
     }
     const contatoExcluido = result.rows[0];
 
+    // Log de auditoria
     await logAction(
       req.user.userId,
       req.user.email,
       ACTION_TYPES.DELETE,
       ENTITY_TYPES.CONTATO_SOCIETARIO,
-      id, 
-      { nome: contatoExcluido.nome, email: contatoExcluido.email }
+      id, // ID da entidade excluída
+      { nome: contatoExcluido.nome, email: contatoExcluido.email } // Detalhes do contato excluído
     );
 
     res.json({ success: true, message: 'Contato societário excluído com sucesso!' });
