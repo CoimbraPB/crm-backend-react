@@ -1,10 +1,11 @@
 const express = require('express');
-const pool = require('../config/database');
-const auth = require('../middleware/auth');
-const { logAction, ACTION_TYPES, ENTITY_TYPES } = require('../services/auditLogService');
+const pool = require('../config/database'); // Ajuste o caminho se necessário
+const auth = require('../middleware/auth'); // Ajuste o caminho se necessário
+const { logAction, ACTION_TYPES, ENTITY_TYPES } = require('../services/auditLogService'); // Descomente e ajuste o caminho se usar
 
 const router = express.Router();
 
+// GET todos os contatos societários COM DADOS DO CLIENTE (para exportação global e outros usos)
 router.get('/com-cliente', auth, async (req, res) => {
   try {
     const queryText = `
@@ -16,6 +17,7 @@ router.get('/com-cliente', auth, async (req, res) => {
         cs.cpf,
         TO_CHAR(cs.data_nascimento, 'YYYY-MM-DD') as data_nascimento,
         cs.cargo,
+        cs.telefone, -- Adicionado telefone
         cs.created_at,
         cs.updated_at,
         c.nome as cliente_nome, 
@@ -32,33 +34,7 @@ router.get('/com-cliente', auth, async (req, res) => {
   }
 });
 
-router.get('/', auth, async (req, res) => {
-  try {
-    const queryText = `
-      SELECT 
-        cs.id,
-        cs.cliente_id,
-        cs.nome,
-        cs.email,
-        cs.cpf,
-        TO_CHAR(cs.data_nascimento, 'YYYY-MM-DD') as data_nascimento,
-        cs.cargo,
-        cs.created_at,
-        cs.updated_at,
-        c.nome as cliente_nome, 
-        c.codigo as cliente_codigo 
-      FROM contatos_societarios cs
-      JOIN clientes c ON cs.cliente_id = c.id
-      ORDER BY c.nome, cs.nome
-    `;
-    const result = await pool.query(queryText);
-    res.json({ success: true, contatos: result.rows || [] });
-  } catch (error) {
-    console.error('Erro ao buscar contatos societários:', error);
-    res.status(500).json({ success: false, message: 'Erro interno do servidor', errorDetail: error.message });
-  }
-});
-
+// GET contatos societários por cliente_id (protegido)
 router.get('/cliente/:cliente_id', auth, async (req, res) => {
   try {
     const { cliente_id } = req.params;
@@ -71,6 +47,7 @@ router.get('/cliente/:cliente_id', auth, async (req, res) => {
           cs.cpf,
           TO_CHAR(cs.data_nascimento, 'YYYY-MM-DD') as data_nascimento,
           cs.cargo,
+          cs.telefone, -- Adicionado telefone
           cs.created_at,
           cs.updated_at,
           c.nome as cliente_nome, 
@@ -87,9 +64,49 @@ router.get('/cliente/:cliente_id', auth, async (req, res) => {
   }
 });
 
+// ROTA DE BUSCA DE CLIENTES POR CONTATO
+router.get('/search/clientes-por-contato', auth, async (req, res) => {
+  const { q } = req.query;
+
+  if (!q || String(q).trim() === '') {
+    return res.status(400).json({ success: false, message: 'O termo de busca (q) é obrigatório.' });
+  }
+
+  const searchTerm = String(q).trim();
+  const searchTermDigits = searchTerm.replace(/\D/g, '');
+
+  try {
+    // cs.* incluirá o novo campo telefone automaticamente
+    const queryText = `
+      SELECT DISTINCT ON (c.id)
+        c.*, 
+        cs.nome as matched_contato_nome,
+        cs.cpf as matched_contato_cpf,
+        cs.telefone as matched_contato_telefone -- Adicionado telefone do contato que deu match
+      FROM clientes c
+      JOIN contatos_societarios cs ON c.id = cs.cliente_id
+      WHERE 
+        cs.nome ILIKE $1 OR 
+        cs.cpf = $2 
+      ORDER BY c.id, c.nome;
+    `;
+    const result = await pool.query(queryText, [`%${searchTerm}%`, searchTermDigits]);
+
+    if (result.rows.length === 0) {
+      return res.json({ success: true, message: 'Nenhum cliente encontrado para o contato informado.', clientes: [] });
+    }
+    res.json({ success: true, clientes: result.rows });
+  } catch (error) {
+    console.error('Erro ao buscar clientes por contato societário:', error);
+    res.status(500).json({ success: false, message: 'Erro interno do servidor.', errorDetail: error.message });
+  }
+});
+
+
+// POST criar novo contato societário (protegido)
 router.post('/', auth, async (req, res) => {
   try {
-    const { cliente_id, nome, email, cpf, data_nascimento, cargo } = req.body;
+    const { cliente_id, nome, email, cpf, data_nascimento, cargo, telefone } = req.body; // Adicionado telefone
 
     if (!cliente_id || !nome || !cpf) { 
       return res.status(400).json({ success: false, message: 'Cliente, Nome e CPF são obrigatórios.' });
@@ -100,22 +117,32 @@ router.post('/', auth, async (req, res) => {
         return res.status(400).json({ success: false, message: 'CPF deve conter 11 dígitos.' });
     }
 
-    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (email && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
         return res.status(400).json({ success: false, message: 'Formato de e-mail inválido.' });
     }
-    // Permite string vazia ou null para data_nascimento, mas valida formato se preenchido
     if (data_nascimento && data_nascimento !== '' && data_nascimento !== null && !/^\d{4}-\d{2}-\d{2}$/.test(data_nascimento)) {
         return res.status(400).json({ success: false, message: 'Formato de data inválido. Use YYYY-MM-DD ou deixe vazio/nulo.' });
     }
+    // Validação simples para telefone (opcional) - apenas para garantir que não é excessivamente longo se fornecido
+    if (telefone && String(telefone).length > 20) {
+        return res.status(400).json({ success: false, message: 'Telefone não pode exceder 20 caracteres.' });
+    }
 
-    const queryText = 'INSERT INTO contatos_societarios (cliente_id, nome, email, cpf, data_nascimento, cargo) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, cliente_id, nome, email, cpf, TO_CHAR(data_nascimento, \'YYYY-MM-DD\') as data_nascimento, cargo, created_at, updated_at';
+
+    const queryText = `
+      INSERT INTO contatos_societarios 
+        (cliente_id, nome, email, cpf, data_nascimento, cargo, telefone) 
+      VALUES ($1, $2, $3, $4, $5, $6, $7) 
+      RETURNING id, cliente_id, nome, email, cpf, TO_CHAR(data_nascimento, 'YYYY-MM-DD') as data_nascimento, cargo, telefone, created_at, updated_at
+    `;
     const result = await pool.query(queryText, [
       cliente_id, 
       nome, 
       email || null, 
-      cpfDigits, // Salva apenas os dígitos do CPF
+      cpfDigits, 
       data_nascimento || null, 
-      cargo || null
+      cargo || null,
+      telefone || null // Adicionado telefone
     ]);
     const novoContato = result.rows[0];
 
@@ -123,10 +150,10 @@ router.post('/', auth, async (req, res) => {
         await logAction(
           req.user.userId, 
           req.user.email,
-          ACTION_TYPES.CONTATO_SOCIETARIO_CREATED,
-          ENTITY_TYPES.CONTATO_SOCIETARIO,
+          ACTION_TYPES.CONTATO_SOCIETARIO_CREATED, // Assegure que ACTION_TYPES esteja definido
+          ENTITY_TYPES.CONTATO_SOCIETARIO,      // Assegure que ENTITY_TYPES esteja definido
           novoContato.id,
-          { cliente_id: novoContato.cliente_id, nome: novoContato.nome, email: novoContato.email, cpf: novoContato.cpf } 
+          { ...novoContato } // Loga todos os campos do novo contato
         );
     } else {
         console.warn('Usuário não autenticado ou dados do usuário ausentes no token ao tentar logar ação de criação de contato.');
@@ -136,20 +163,19 @@ router.post('/', auth, async (req, res) => {
   } catch (error) {
     console.error('Erro ao criar contato societário:', error);
     if (error.code === '23505') { 
-        if (error.constraint && error.constraint.includes('cpf')) { // Assumindo que a constraint de CPF único se chama algo como '...cpf_key' ou '...cpf_unique'
+        if (error.constraint && error.constraint.includes('cpf')) { 
              return res.status(409).json({ success: false, message: 'CPF já cadastrado para outro contato.', errorDetail: error.message });
         }
-        // Adicione aqui a verificação para email único por cliente, se houver essa constraint.
-        // Exemplo: if (error.constraint && error.constraint.includes('contatos_societarios_cliente_id_email_key')) { ... }
     }
     res.status(500).json({ success: false, message: 'Erro interno do servidor ao criar contato.', errorDetail: error.message });
   }
 });
 
+// PUT atualizar contato societário (protegido)
 router.put('/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
-    const { nome, email, cpf, data_nascimento, cargo } = req.body; 
+    const { nome, email, cpf, data_nascimento, cargo, telefone } = req.body; // Adicionado telefone
 
     if (!nome || !cpf) { 
       return res.status(400).json({ success: false, message: 'Nome e CPF são obrigatórios para atualização.' });
@@ -160,21 +186,29 @@ router.put('/:id', auth, async (req, res) => {
         return res.status(400).json({ success: false, message: 'CPF deve conter 11 dígitos.' });
     }
     
-    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (email && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
         return res.status(400).json({ success: false, message: 'Formato de e-mail inválido.' });
     }
-
     if (data_nascimento && data_nascimento !== '' && data_nascimento !== null && !/^\d{4}-\d{2}-\d{2}$/.test(data_nascimento)) {
         return res.status(400).json({ success: false, message: 'Formato de data inválido. Use YYYY-MM-DD ou deixe vazio/nulo.' });
     }
+    if (telefone && String(telefone).length > 20) {
+        return res.status(400).json({ success: false, message: 'Telefone não pode exceder 20 caracteres.' });
+    }
     
-    const queryText = 'UPDATE contatos_societarios SET nome = $1, email = $2, cpf = $3, data_nascimento = $4, cargo = $5, updated_at = CURRENT_TIMESTAMP WHERE id = $6 RETURNING id, cliente_id, nome, email, cpf, TO_CHAR(data_nascimento, \'YYYY-MM-DD\') as data_nascimento, cargo, created_at, updated_at';
+    const queryText = `
+      UPDATE contatos_societarios 
+      SET nome = $1, email = $2, cpf = $3, data_nascimento = $4, cargo = $5, telefone = $6, updated_at = CURRENT_TIMESTAMP 
+      WHERE id = $7 
+      RETURNING id, cliente_id, nome, email, cpf, TO_CHAR(data_nascimento, 'YYYY-MM-DD') as data_nascimento, cargo, telefone, created_at, updated_at
+    `;
     const result = await pool.query(queryText, [
       nome, 
       email || null, 
-      cpfDigits, // Salva apenas os dígitos do CPF
+      cpfDigits, 
       data_nascimento || null, 
       cargo || null, 
+      telefone || null, // Adicionado telefone
       id
     ]);
 
@@ -187,10 +221,10 @@ router.put('/:id', auth, async (req, res) => {
         await logAction(
           req.user.userId,
           req.user.email,
-          ACTION_TYPES.CONTATO_SOCIETARIO_UPDATED,
-          ENTITY_TYPES.CONTATO_SOCIETARIO,
+          ACTION_TYPES.CONTATO_SOCIETARIO_UPDATED, // Assegure que ACTION_TYPES esteja definido
+          ENTITY_TYPES.CONTATO_SOCIETARIO,       // Assegure que ENTITY_TYPES esteja definido
           contatoAtualizado.id,
-          { nome: contatoAtualizado.nome, email: contatoAtualizado.email, cpf: contatoAtualizado.cpf } 
+          { ...contatoAtualizado } // Loga todos os campos atualizados
         );
     } else {
         console.warn('Usuário não autenticado ou dados do usuário ausentes no token ao tentar logar ação de atualização de contato.');
@@ -203,17 +237,18 @@ router.put('/:id', auth, async (req, res) => {
         if (error.constraint && error.constraint.includes('cpf')) { 
              return res.status(409).json({ success: false, message: 'CPF já cadastrado para outro contato.', errorDetail: error.message });
         }
-        // Adicione aqui a verificação para email único por cliente, se houver essa constraint.
     }
     res.status(500).json({ success: false, message: 'Erro interno do servidor ao atualizar contato.', errorDetail: error.message });
   }
 });
 
+// DELETE contato societário (protegido)
 router.delete('/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
 
-    const contatoParaExcluirResult = await pool.query('SELECT nome, email, cliente_id, cpf FROM contatos_societarios WHERE id = $1', [id]);
+    // Buscar o contato para log antes de excluir
+    const contatoParaExcluirResult = await pool.query('SELECT * FROM contatos_societarios WHERE id = $1', [id]);
     if (contatoParaExcluirResult.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'Contato societário não encontrado para exclusão.' });
     }
@@ -229,10 +264,10 @@ router.delete('/:id', auth, async (req, res) => {
         await logAction(
           req.user.userId,
           req.user.email,
-          ACTION_TYPES.CONTATO_SOCIETARIO_DELETED,
-          ENTITY_TYPES.CONTATO_SOCIETARIO,
+          ACTION_TYPES.CONTATO_SOCIETARIO_DELETED, // Assegure que ACTION_TYPES esteja definido
+          ENTITY_TYPES.CONTATO_SOCIETARIO,       // Assegure que ENTITY_TYPES esteja definido
           id, 
-          { nome: contatoExcluidoDetails.nome, email: contatoExcluidoDetails.email, cliente_id: contatoExcluidoDetails.cliente_id, cpf: contatoExcluidoDetails.cpf } 
+          { nome: contatoExcluidoDetails.nome, cpf: contatoExcluidoDetails.cpf, telefone: contatoExcluidoDetails.telefone } // Log de campos relevantes
         );
     } else {
         console.warn('Usuário não autenticado ou dados do usuário ausentes no token ao tentar logar ação de exclusão de contato.');
