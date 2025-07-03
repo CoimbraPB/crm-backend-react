@@ -60,12 +60,12 @@ router.post('/', auth, async (req, res) => {
 
     // Log de auditoria
     await logAction(
-      req.user.userId, // Ou req.user.id dependendo da sua estrutura de user no token
+      req.user.userId, 
       req.user.email,
-      ACTION_TYPES.CREATE,
-      ENTITY_TYPES.CONTATO_SOCIETARIO,
+      ACTION_TYPES.CONTATO_SOCIETARIO_CREATED, // Correção
+      ENTITY_TYPES.CONTATO_SOCIETARIO,      // Correção
       novoContato.id,
-      { cliente_id, nome, email } // Detalhes relevantes
+      { cliente_id, nome, email } 
     );
 
     res.status(201).json({ success: true, message: 'Contato societário criado com sucesso!', contato: novoContato });
@@ -110,10 +110,10 @@ router.put('/:id', auth, async (req, res) => {
     await logAction(
       req.user.userId,
       req.user.email,
-      ACTION_TYPES.UPDATE,
-      ENTITY_TYPES.CONTATO_SOCIETARIO,
+      ACTION_TYPES.CONTATO_SOCIETARIO_UPDATED, // Correção
+      ENTITY_TYPES.CONTATO_SOCIETARIO,       // Correção
       contatoAtualizado.id,
-      { nome, email } // Detalhes relevantes da atualização
+      { nome, email } 
     );
 
     res.json({ success: true, message: 'Contato societário atualizado com sucesso!', contato: contatoAtualizado });
@@ -147,10 +147,10 @@ router.delete('/:id', auth, async (req, res) => {
     await logAction(
       req.user.userId,
       req.user.email,
-      ACTION_TYPES.DELETE,
-      ENTITY_TYPES.CONTATO_SOCIETARIO,
-      id, // ID da entidade excluída
-      { nome: contatoExcluido.nome, email: contatoExcluido.email } // Detalhes do contato excluído
+      ACTION_TYPES.CONTATO_SOCIETARIO_DELETED, // Correção
+      ENTITY_TYPES.CONTATO_SOCIETARIO,       // Correção
+      id, 
+      { nome: contatoExcluido.nome, email: contatoExcluido.email } 
     );
 
     res.json({ success: true, message: 'Contato societário excluído com sucesso!' });
