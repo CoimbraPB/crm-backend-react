@@ -5,25 +5,16 @@ const { logAction, ACTION_TYPES, ENTITY_TYPES } = require('../services/auditLogS
 
 const router = express.Router();
 
-// Helper para formatar data para YYYY-MM-DD
-// Necessário se o seu driver pg não fizer isso automaticamente para tipo DATE
-// ou se você quiser ter certeza absoluta do formato.
-// No entanto, para o tipo DATE do PostgreSQL, a conversão para string geralmente já é YYYY-MM-DD.
-// A questão principal é como o driver do Node.js (pg) lida com a conversão de DATE para objeto Date do JS.
-// Se o driver converte DATE para um objeto Date do JS à meia-noite UTC,
-// então o problema de timezone pode ocorrer quando esse objeto Date é serializado para JSON.
-// Forçar TO_CHAR na query é a forma mais segura de garantir a string.
-
 router.get('/com-cliente', auth, async (req, res) => {
   try {
-    const result = await pool.query(`
+    const queryText = `
       SELECT 
         cs.id,
         cs.cliente_id,
         cs.nome,
         cs.email,
         cs.cpf,
-        TO_CHAR(cs.data_nascimento, 'YYYY-MM-DD') as data_nascimento, // Formatação aqui
+        TO_CHAR(cs.data_nascimento, 'YYYY-MM-DD') as data_nascimento,
         cs.cargo,
         cs.created_at,
         cs.updated_at,
@@ -32,7 +23,8 @@ router.get('/com-cliente', auth, async (req, res) => {
       FROM contatos_societarios cs
       JOIN clientes c ON cs.cliente_id = c.id
       ORDER BY c.nome, cs.nome
-    `);
+    `;
+    const result = await pool.query(queryText);
     res.json({ success: true, contatos: result.rows || [] });
   } catch (error) {
     console.error('Erro ao buscar contatos societários com dados do cliente:', error);
@@ -42,14 +34,14 @@ router.get('/com-cliente', auth, async (req, res) => {
 
 router.get('/', auth, async (req, res) => {
   try {
-    const result = await pool.query(`
+    const queryText = `
       SELECT 
         cs.id,
         cs.cliente_id,
         cs.nome,
         cs.email,
         cs.cpf,
-        TO_CHAR(cs.data_nascimento, 'YYYY-MM-DD') as data_nascimento, // Formatação aqui
+        TO_CHAR(cs.data_nascimento, 'YYYY-MM-DD') as data_nascimento,
         cs.cargo,
         cs.created_at,
         cs.updated_at,
@@ -58,7 +50,8 @@ router.get('/', auth, async (req, res) => {
       FROM contatos_societarios cs
       JOIN clientes c ON cs.cliente_id = c.id
       ORDER BY c.nome, cs.nome
-    `);
+    `;
+    const result = await pool.query(queryText);
     res.json({ success: true, contatos: result.rows || [] });
   } catch (error) {
     console.error('Erro ao buscar contatos societários:', error);
@@ -69,14 +62,14 @@ router.get('/', auth, async (req, res) => {
 router.get('/cliente/:cliente_id', auth, async (req, res) => {
   try {
     const { cliente_id } = req.params;
-    const result = await pool.query(
-      `SELECT 
+    const queryText = `
+      SELECT 
           cs.id,
           cs.cliente_id,
           cs.nome,
           cs.email,
           cs.cpf,
-          TO_CHAR(cs.data_nascimento, 'YYYY-MM-DD') as data_nascimento, // Formatação aqui
+          TO_CHAR(cs.data_nascimento, 'YYYY-MM-DD') as data_nascimento,
           cs.cargo,
           cs.created_at,
           cs.updated_at,
@@ -85,9 +78,8 @@ router.get('/cliente/:cliente_id', auth, async (req, res) => {
         FROM contatos_societarios cs 
         JOIN clientes c ON cs.cliente_id = c.id 
         WHERE cs.cliente_id = $1 
-        ORDER BY cs.nome`,
-      [cliente_id]
-    );
+        ORDER BY cs.nome`;
+    const result = await pool.query(queryText, [cliente_id]);
     res.json({ success: true, contatos: result.rows || [] });
   } catch (error) {
     console.error('Erro ao buscar contatos societários por cliente:', error);
@@ -95,20 +87,16 @@ router.get('/cliente/:cliente_id', auth, async (req, res) => {
   }
 });
 
-// POST criar novo contato societário (protegido)
 router.post('/', auth, async (req, res) => {
   try {
     const { cliente_id, nome, email, cpf, data_nascimento, cargo } = req.body;
 
-    // data_nascimento deve chegar como YYYY-MM-DD do frontend, o que é ok para o tipo DATE do PG
     if (!cliente_id || !nome || !email || !cpf || !data_nascimento || !cargo) {
       return res.status(400).json({ success: false, message: 'Todos os campos são obrigatórios.' });
     }
     
-    const result = await pool.query(
-      'INSERT INTO contatos_societarios (cliente_id, nome, email, cpf, data_nascimento, cargo) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, cliente_id, nome, email, cpf, TO_CHAR(data_nascimento, \'YYYY-MM-DD\') as data_nascimento, cargo, created_at, updated_at',
-      [cliente_id, nome, email, cpf, data_nascimento, cargo]
-    );
+    const queryText = 'INSERT INTO contatos_societarios (cliente_id, nome, email, cpf, data_nascimento, cargo) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, cliente_id, nome, email, cpf, TO_CHAR(data_nascimento, \'YYYY-MM-DD\') as data_nascimento, cargo, created_at, updated_at';
+    const result = await pool.query(queryText, [cliente_id, nome, email, cpf, data_nascimento, cargo]);
     const novoContato = result.rows[0];
 
     if (req.user && req.user.userId && req.user.email) {
@@ -139,7 +127,6 @@ router.post('/', auth, async (req, res) => {
   }
 });
 
-// PUT atualizar contato societário (protegido)
 router.put('/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
@@ -149,10 +136,8 @@ router.put('/:id', auth, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Todos os campos (nome, email, cpf, data_nascimento, cargo) são obrigatórios para atualização.' });
     }
 
-    const result = await pool.query(
-      'UPDATE contatos_societarios SET nome = $1, email = $2, cpf = $3, data_nascimento = $4, cargo = $5, updated_at = CURRENT_TIMESTAMP WHERE id = $6 RETURNING id, cliente_id, nome, email, cpf, TO_CHAR(data_nascimento, \'YYYY-MM-DD\') as data_nascimento, cargo, created_at, updated_at',
-      [nome, email, cpf, data_nascimento, cargo, id]
-    );
+    const queryText = 'UPDATE contatos_societarios SET nome = $1, email = $2, cpf = $3, data_nascimento = $4, cargo = $5, updated_at = CURRENT_TIMESTAMP WHERE id = $6 RETURNING id, cliente_id, nome, email, cpf, TO_CHAR(data_nascimento, \'YYYY-MM-DD\') as data_nascimento, cargo, created_at, updated_at';
+    const result = await pool.query(queryText, [nome, email, cpf, data_nascimento, cargo, id]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'Contato societário não encontrado.' });
@@ -187,8 +172,6 @@ router.put('/:id', auth, async (req, res) => {
   }
 });
 
-// DELETE contato societário (protegido)
-// (Não precisa formatar data aqui pois estamos apenas excluindo)
 router.delete('/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
