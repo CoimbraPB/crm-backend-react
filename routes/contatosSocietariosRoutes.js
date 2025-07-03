@@ -160,43 +160,6 @@ router.delete('/:id', auth, async (req, res) => {
   }
 });
 
-router.get('/exportar-socios', auth, async (req, res) => {
-  try {
-    const { mes_aniversario } = req.query; // Vem como string '01', '02', etc.
 
-    let queryText = `
-      SELECT 
-        cs.id AS id_socio,
-        cs.nome AS nome_socio, 
-        cs.email AS email_socio, 
-        cs.data_nascimento AS data_aniversario_socio, 
-        c.nome AS nome_empresa
-      FROM contatos_societarios cs
-      JOIN clientes c ON cs.cliente_id = c.id
-    `;
-    
-    const queryParams = [];
-
-    if (mes_aniversario && mes_aniversario !== 'todos') {
-      // Adiciona condição para filtrar por mês de aniversário
-      // ATENÇÃO: a forma de extrair o mês da data_nascimento depende do seu SGBD.
-      // Para PostgreSQL, você pode usar EXTRACT(MONTH FROM data_nascimento)
-      // Para MySQL, MONTH(data_nascimento)
-      // Ajuste conforme necessário.
-      queryText += ' WHERE EXTRACT(MONTH FROM cs.data_nascimento) = $1'; 
-      queryParams.push(parseInt(mes_aniversario, 10));
-    }
-
-    queryText += ' ORDER BY c.nome, cs.nome';
-
-    const result = await pool.query(queryText, queryParams);
-    
-    res.json({ success: true, socios: result.rows });
-
-  } catch (error) {
-    console.error('Erro ao buscar sócios para exportação:', error);
-    res.status(500).json({ success: false, message: 'Erro interno do servidor ao exportar sócios', error: error.message });
-  }
-});
 
 module.exports = router;
