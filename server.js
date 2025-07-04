@@ -41,6 +41,9 @@ app.use('/config-valores-hora-cargo', require('./routes/configValoresHoraCargoRo
 // NOVAS ROTAS PARA CONTATOS SOCIETÁRIOS
 app.use('/contatos-societarios', require('./routes/contatosSocietariosRoutes'));
 
+// NOVAS ROTAS PARA PERFIL DE USUÁRIO
+app.use('/perfil', require('./routes/perfilRoutes'));
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({ 
