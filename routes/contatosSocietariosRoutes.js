@@ -117,7 +117,7 @@ router.post('/', auth, async (req, res) => {
         return res.status(400).json({ success: false, message: 'CPF deve conter 11 dígitos.' });
     }
 
-    if (email && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         return res.status(400).json({ success: false, message: 'Formato de e-mail inválido.' });
     }
     if (data_nascimento && data_nascimento !== '' && data_nascimento !== null && !/^\d{4}-\d{2}-\d{2}$/.test(data_nascimento)) {
