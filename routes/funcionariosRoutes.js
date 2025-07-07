@@ -57,9 +57,13 @@ router.put('/:id', authMiddleware, canManageFuncionarios, async (req, res) => {
          return res.status(400).json({ success: false, message: `Valor de setor inválido: ${setor}. Valores permitidos: ${setoresValidos.join(', ')} ou deixe em branco.` });
     }
 
-    const modelo_trabalho = ['Presencial', 'Híbrido', 'Home Office',];
-    if (req.body.hasOwnProperty('modelo_trabalho') && modelo_trabalho && !modelo_trabalho.includes(modelo_trabalho)) {
-        return res.status(400).json({ success: false, message: 'Valor de modelo de trabalho inválido.' });
+    const modelosTrabalhoValidos = ['Presencial', 'Híbrido', 'Home Office'];
+    if (
+    req.body.hasOwnProperty('modelo_trabalho') &&
+    modelo_trabalho &&
+    !modelosTrabalhoValidos.includes(modelo_trabalho)
+    ) {
+    return res.status(400).json({ success: false, message: 'Valor de modelo de trabalho inválido.' });
     }
 
     try {
