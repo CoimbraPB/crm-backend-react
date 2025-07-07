@@ -92,34 +92,30 @@ router.get('/solicitar-upload-url', authMiddleware, async (req, res) => {
         console.error('Tentativa de solicitar URL de upload sem cliente Supabase Admin configurado.');
         return res.status(500).json({ success: false, message: 'Serviço de upload temporariamente indisponível. Configuração do Supabase Storage incompleta no servidor.' });
     }
+
     const userId = req.user.userId;
-    // Usar um nome de arquivo consistente por usuário no Storage (ex: profile.png) simplifica
-    const supabaseFilePath = `${userId}/profile.png`; // Caminho no Supabase Storage
+    const supabaseFilePath = `${userId}/profile.png`;
 
     try {
-        // Tenta remover o arquivo antigo primeiro
         const { error: deleteError } = await supabaseAdmin.storage
-            .from('profile-pictures') // Certifique-se que o nome do bucket está correto
-            .remove([supabaseFilePath]); 
+            .from('profile-pictures')
+            .remove([supabaseFilePath]);
 
         if (deleteError && deleteError.message !== 'The resource was not found' && deleteError.message !== 'Not Found') {
             console.error(`Supabase error deleting old file ${supabaseFilePath}:`, deleteError);
-            // Considerar se deve falhar ou apenas logar e continuar
         }
-    } catch (e) {
-        console.error(`Exception deleting old file ${supabaseFilePath}:`, e);
-    }
 
-    // Agora, gere a URL assinada para um NOVO upload (sem upsert)
-    const { data, error: createUrlError } = await supabaseAdmin.storage
-        .from('profile-pictures')
-        .createSignedUploadUrl(supabaseFilePath, 300); // Não precisa de upsert: true aqui
+        const { data, error: createUrlError } = await supabaseAdmin.storage
+            .from('profile-pictures')
+            .createSignedUploadUrl(supabaseFilePath, 300);
 
-        if (error) {
-            console.error(`Supabase error creating signed URL for userId ${userId}, path ${supabaseFilePath}:`, error);
+        if (createUrlError) {
+            console.error(`Supabase error creating signed URL for userId ${userId}, path ${supabaseFilePath}:`, createUrlError);
             return res.status(500).json({ success: false, message: 'Erro ao gerar URL segura para upload.' });
         }
+
         res.json({ success: true, signedUrl: data.signedUrl, pathForConfirmation: data.path });
+
     } catch (e) {
         console.error(`Exception creating signed URL for userId ${userId}, path ${supabaseFilePath}:`, e);
         res.status(500).json({ success: false, message: 'Erro interno crítico ao gerar URL para upload.' });
