@@ -44,6 +44,9 @@ app.use('/contatos-societarios', require('./routes/contatosSocietariosRoutes'));
 // NOVAS ROTAS PARA PERFIL DE USUÁRIO
 app.use('/perfil', require('./routes/perfilRoutes'));
 
+// NOVAS ROTAS PARA FUNCIONÁRIOS
+app.use('/funcionarios', require('./routes/funcionariosRoutes'));
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({ 
