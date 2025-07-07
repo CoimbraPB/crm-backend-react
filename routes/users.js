@@ -116,7 +116,7 @@ router.put('/:id', auth, authorizeAdminOrDev, async (req, res) => {
 
   // Validar tipo de permissão se fornecida
   if (permissao) {
-    const validPermissions = ['Dev', 'Gerente', 'Operador', 'Gestor'];
+    const validPermissions = ['Dev', 'Gerente', 'Operador', 'Gestor', 'Administrativo', 'CRM', 'Fiscal'];
     if (!validPermissions.includes(permissao)) {
       return res.status(400).json({ success: false, message: 'Permissão inválida.' });
     }
