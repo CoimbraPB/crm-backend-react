@@ -94,12 +94,12 @@ router.get('/solicitar-upload-url', authMiddleware, async (req, res) => {
     }
     const userId = req.user.userId;
     // Usar um nome de arquivo consistente por usuário no Storage (ex: profile.png) simplifica
-    const supabaseFilePath = `test-profile-${userId}.png`; // Sem subpasta, nome único por usuário
+    const supabaseFilePath = `${userId}/profile.png`; // Caminho no Supabase Storage
 
     try {
         const { data, error } = await supabaseAdmin.storage
-    .from('profile-pictures') 
-    .createSignedUploadUrl(supabaseFilePath, 300, { upsert: true });
+            .from('profile-pictures') // Nome do seu bucket (corrigido para hífen, se for o caso)
+            .createSignedUploadUrl(supabaseFilePath, 300, { upsert: true }); // URL válida por 5 minutos (300s) e upsert: true
 
         if (error) {
             console.error(`Supabase error creating signed URL for userId ${userId}, path ${supabaseFilePath}:`, error);
