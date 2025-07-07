@@ -101,7 +101,7 @@ router.get('/solicitar-upload-url', authMiddleware, async (req, res) => {
 
     try {
         const { data, error } = await supabaseAdmin.storage
-            .from('profile_pictures') // Nome do seu bucket
+            .from('profile-pictures') // Nome do seu bucket
             .createSignedUploadUrl(supabaseFilePath, 60 * 5); // URL válida por 5 minutos (300 segundos)
 
         if (error) {
@@ -137,7 +137,7 @@ router.post('/confirmar-upload-foto', authMiddleware, async (req, res) => {
     try {
         // Construir a URL pública. Certifique-se que SUPABASE_URL está correto no .env
         // A URL pública não muda mesmo se você usar URLs assinadas para upload.
-        const publicImageUrl = `${process.env.SUPABASE_URL}/storage/v1/object/public/profile_pictures/${pathForConfirmation}`;
+        const publicImageUrl = `${process.env.SUPABASE_URL}/storage/v1/object/public/profile-pictures/${pathForConfirmation}`;
 
         const updateQuery = 'UPDATE usuarios SET foto_perfil_url = $1 WHERE id = $2 RETURNING foto_perfil_url';
         const result = await pool.query(updateQuery, [publicImageUrl, userId]);
