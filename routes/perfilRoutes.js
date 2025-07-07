@@ -26,7 +26,7 @@ router.get('/meu', authMiddleware, async (req, res) => {
     const userId = req.user.userId; 
     try {
         const result = await pool.query(
-            'SELECT id, email, nome, permissao, setor, ramal, codigo_ifood, predio, foto_perfil_url, criado_em FROM usuarios WHERE id = $1',
+            'SELECT id, email, nome, permissao, setor, ramal, modelo_trabalho, codigo_ifood, predio, foto_perfil_url, criado_em FROM usuarios WHERE id = $1',
             [userId]
         );
         if (result.rows.length === 0) {
@@ -42,7 +42,7 @@ router.get('/meu', authMiddleware, async (req, res) => {
 // Rota para ATUALIZAR o perfil do usuário logado (dados textuais)
 // PUT /api/perfil/meu
 router.put('/meu', authMiddleware, async (req, res) => {
-    const { setor, ramal, codigo_ifood, predio, nome } = req.body;
+    const { setor, ramal, codigo_ifood, predio, nome, modelo_trabalho } = req.body;
     const userId = req.user.userId;
 
     // Validação para 'predio'
@@ -53,17 +53,29 @@ router.put('/meu', authMiddleware, async (req, res) => {
         if (req.body.hasOwnProperty('setor') && setor !== null && setor !== '' && !['Departamento Pessoal','Societário','Regularização','CRM','Administrativo','Contabilidade','Fiscal','Pis Cofins','Tecnologia'].includes(setor)) {
         return res.status(400).json({ success: false, message: 'Valor inválido para Setor. Use as alternativas, ou deixe em branco/nulo para limpar.' });
     }
+    if (req.body.hasOwnProperty('modelo_trabalho') && modelo_trabalho && !['Presencial', 'Híbrido', 'Home Office'].includes(modelo_trabalho)) {
+        return res.status(400).json({ success: false, message: 'Valor inválido para Modelo de Trabalho. Use "Presencial", "Híbrido", "Home Office", ou deixe em branco/nulo para limpar.' });
+    }
 
     try {
         const fieldsToUpdate = {};
         // Adiciona ao objeto de atualização apenas os campos que foram enviados e são permitidos
-        if (req.body.hasOwnProperty('setor')) fieldsToUpdate.setor = setor;
-        if (req.body.hasOwnProperty('ramal')) fieldsToUpdate.ramal = ramal;
-        if (req.body.hasOwnProperty('codigo_ifood')) fieldsToUpdate.codigo_ifood = codigo_ifood;
-        if (req.body.hasOwnProperty('predio')) fieldsToUpdate.predio = predio;
-        // Adicione outros campos aqui se necessário, ex: nome (se o usuário puder alterar o próprio nome)
-        if (req.body.hasOwnProperty('nome')) fieldsToUpdate.nome = req.body.nome = nome;
-        if (req.body.hasOwnProperty('setor')) fieldsToUpdate.setor = req.body.setor = setor;
+        if (req.body.hasOwnProperty('nome')) fieldsToUpdate.nome = nome;
+        if (req.body.hasOwnProperty('setor')) {
+            fieldsToUpdate.setor = (setor === '' || setor === null) ? null : setor;
+        }
+        if (req.body.hasOwnProperty('ramal')) {
+            fieldsToUpdate.ramal = (ramal === '' || ramal === null) ? null : ramal;
+        }
+        if (req.body.hasOwnProperty('codigo_ifood')) {
+            fieldsToUpdate.codigo_ifood = (codigo_ifood === '' || codigo_ifood === null) ? null : codigo_ifood;
+        }
+        if (req.body.hasOwnProperty('predio')) {
+            fieldsToUpdate.predio = (predio === '' || predio === null) ? null : predio;
+        }
+        if (req.body.hasOwnProperty('modelo_trabalho')) {
+            fieldsToUpdate.modelo_trabalho = (modelo_trabalho === '' || modelo_trabalho === null) ? null : modelo_trabalho;
+        }
 
 
         if (Object.keys(fieldsToUpdate).length === 0) {
@@ -75,7 +87,7 @@ router.put('/meu', authMiddleware, async (req, res) => {
 
         // Adiciona o userId como último parâmetro para a cláusula WHERE
         queryValues.push(userId);
-        const query = `UPDATE usuarios SET ${querySetParts.join(', ')} WHERE id = $${queryValues.length} RETURNING id, email, nome, permissao, setor, ramal, codigo_ifood, predio, foto_perfil_url`;
+        const query = `UPDATE usuarios SET ${querySetParts.join(', ')} WHERE id = $${queryValues.length} RETURNING id, email, nome, modelo_trabalho, permissao, setor, ramal, codigo_ifood, predio, foto_perfil_url`;
         
         const result = await pool.query(query, queryValues);
 

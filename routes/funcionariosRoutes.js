@@ -19,7 +19,7 @@ const canManageFuncionarios = (req, res, next) => {
 router.get('/', authMiddleware, canManageFuncionarios, async (req, res) => {
     const { nome } = req.query; // Para o filtro de busca por nome
     try {
-        let queryText = 'SELECT id, email, nome, permissao, setor, ramal, codigo_ifood, predio, foto_perfil_url, criado_em FROM usuarios';
+        let queryText = 'SELECT id, email, nome, permissao, setor, ramal, modelo_trabalho, codigo_ifood, predio, foto_perfil_url, criado_em FROM usuarios';
         const queryParams = [];
 
         if (nome) {
@@ -42,7 +42,7 @@ router.get('/', authMiddleware, canManageFuncionarios, async (req, res) => {
 // PUT /funcionarios/:id
 router.put('/:id', authMiddleware, canManageFuncionarios, async (req, res) => {
     const { id: targetUserId } = req.params; // ID do usuário a ser atualizado
-    const { nome, permissao, setor, ramal, codigo_ifood, predio } = req.body;
+    const { nome, permissao, setor, ramal, modelo_trabalho, codigo_ifood, predio } = req.body;
 
     // Validações (adicione mais conforme necessário)
     if (req.body.hasOwnProperty('predio') && predio !== null && predio !== '' && !['173', '177'].includes(String(predio))) {
@@ -55,6 +55,11 @@ router.put('/:id', authMiddleware, canManageFuncionarios, async (req, res) => {
     const setoresValidos = ['Departamento Pessoal', 'Societário', 'Regularização', 'CRM', 'Administrativo', 'Contabilidade', 'Fiscal', 'Pis Cofins', 'Tecnologia']; // Removido null e '' daqui, pois o tratamento abaixo já os converte para null
     if (req.body.hasOwnProperty('setor') && setor && !setoresValidos.includes(setor)) { // Se setor não for nulo/vazio e não estiver na lista
          return res.status(400).json({ success: false, message: `Valor de setor inválido: ${setor}. Valores permitidos: ${setoresValidos.join(', ')} ou deixe em branco.` });
+    }
+
+    const modelo_trabalho = ['Presencial', 'Híbrido', 'Home Office',];
+    if (req.body.hasOwnProperty('modelo_trabalho') && modelo_trabalho && !modelo_trabalho.includes(modelo_trabalho)) {
+        return res.status(400).json({ success: false, message: 'Valor de modelo de trabalho inválido.' });
     }
 
     try {
@@ -71,6 +76,9 @@ router.put('/:id', authMiddleware, canManageFuncionarios, async (req, res) => {
         if (req.body.hasOwnProperty('ramal')) fieldsToUpdate.ramal = (ramal === '') ? null : ramal;
         if (req.body.hasOwnProperty('codigo_ifood')) fieldsToUpdate.codigo_ifood = (codigo_ifood === '') ? null : codigo_ifood;
         if (req.body.hasOwnProperty('predio')) fieldsToUpdate.predio = (predio === '' || predio === null) ? null : String(predio);
+        if (req.body.hasOwnProperty('modelo_trabalho')) {
+            fieldsToUpdate.modelo_trabalho = (modelo_trabalho === '' || modelo_trabalho === null || modelo_trabalho === '__NONE__') ? null : modelo_trabalho;
+        }
 
         if (Object.keys(fieldsToUpdate).length === 0) {
             return res.status(400).json({ success: false, message: 'Nenhum campo válido fornecido para atualização.' });
@@ -80,7 +88,7 @@ router.put('/:id', authMiddleware, canManageFuncionarios, async (req, res) => {
         const queryValues = Object.values(fieldsToUpdate);
         queryValues.push(targetUserId);
 
-        const queryText = `UPDATE usuarios SET ${querySetParts.join(', ')} WHERE id = $${queryValues.length} RETURNING id, email, nome, permissao, setor, ramal, codigo_ifood, predio, foto_perfil_url, criado_em`;
+        const queryText = `UPDATE usuarios SET ${querySetParts.join(', ')} WHERE id = $${queryValues.length} RETURNING id, email, nome, permissao, modelo_trabalho, setor, ramal, codigo_ifood, predio, foto_perfil_url, criado_em`;
         
         const result = await pool.query(queryText, queryValues);
 
