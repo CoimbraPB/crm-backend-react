@@ -97,9 +97,23 @@ router.get('/solicitar-upload-url', authMiddleware, async (req, res) => {
     const supabaseFilePath = `${userId}/profile.png`; // Caminho no Supabase Storage
 
     try {
-        const { data, error } = await supabaseAdmin.storage
-            .from('profile-pictures') // Nome do seu bucket (corrigido para hífen, se for o caso)
-            .createSignedUploadUrl(supabaseFilePath, 300, { upsert: true }); // URL válida por 5 minutos (300s) e upsert: true
+        // Tenta remover o arquivo antigo primeiro
+        const { error: deleteError } = await supabaseAdmin.storage
+            .from('profile-pictures') // Certifique-se que o nome do bucket está correto
+            .remove([supabaseFilePath]); 
+
+        if (deleteError && deleteError.message !== 'The resource was not found' && deleteError.message !== 'Not Found') {
+            console.error(`Supabase error deleting old file ${supabaseFilePath}:`, deleteError);
+            // Considerar se deve falhar ou apenas logar e continuar
+        }
+    } catch (e) {
+        console.error(`Exception deleting old file ${supabaseFilePath}:`, e);
+    }
+
+    // Agora, gere a URL assinada para um NOVO upload (sem upsert)
+    const { data, error: createUrlError } = await supabaseAdmin.storage
+        .from('profile-pictures')
+        .createSignedUploadUrl(supabaseFilePath, 300); // Não precisa de upsert: true aqui
 
         if (error) {
             console.error(`Supabase error creating signed URL for userId ${userId}, path ${supabaseFilePath}:`, error);
