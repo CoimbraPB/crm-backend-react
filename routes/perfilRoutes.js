@@ -42,12 +42,16 @@ router.get('/meu', authMiddleware, async (req, res) => {
 // Rota para ATUALIZAR o perfil do usuário logado (dados textuais)
 // PUT /api/perfil/meu
 router.put('/meu', authMiddleware, async (req, res) => {
-    const { setor, ramal, codigo_ifood, predio } = req.body;
+    const { setor, ramal, codigo_ifood, predio, nome } = req.body;
     const userId = req.user.userId;
 
     // Validação para 'predio'
     if (req.body.hasOwnProperty('predio') && predio !== null && predio !== '' && !['173', '177'].includes(predio)) {
         return res.status(400).json({ success: false, message: 'Valor inválido para prédio. Use "173", "177", ou deixe em branco/nulo para limpar.' });
+    }
+
+        if (req.body.hasOwnProperty('setor') && setor !== null && setor !== '' && !['Departamento Pessoal','Societário','Regularização','CRM','Administrativo','Contabilidade','Fiscal','Pis Cofins','Tecnologia'].includes(setor)) {
+        return res.status(400).json({ success: false, message: 'Valor inválido para Setor. Use as alternativas, ou deixe em branco/nulo para limpar.' });
     }
 
     try {
@@ -58,7 +62,8 @@ router.put('/meu', authMiddleware, async (req, res) => {
         if (req.body.hasOwnProperty('codigo_ifood')) fieldsToUpdate.codigo_ifood = codigo_ifood;
         if (req.body.hasOwnProperty('predio')) fieldsToUpdate.predio = predio;
         // Adicione outros campos aqui se necessário, ex: nome (se o usuário puder alterar o próprio nome)
-        // if (req.body.hasOwnProperty('nome')) fieldsToUpdate.nome = req.body.nome;
+        if (req.body.hasOwnProperty('nome')) fieldsToUpdate.nome = req.body.nome = nome;
+        if (req.body.hasOwnProperty('setor')) fieldsToUpdate.setor = req.body.setor = setor;
 
 
         if (Object.keys(fieldsToUpdate).length === 0) {
