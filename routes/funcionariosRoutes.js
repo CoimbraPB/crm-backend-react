@@ -4,7 +4,7 @@ const authMiddleware = require('../middleware/auth'); // Ajuste o caminho
 const pool = require('../config/database'); // Ajuste o caminho
 
 // Lista de permissões que podem gerenciar funcionários (visualizar e editar)
-const GESTAO_FUNCIONARIOS_PERMISSIONS = ['Administrativo', 'Gerente', 'Gestor', 'Dev'];
+const GESTAO_FUNCIONARIOS_PERMISSIONS = ['Administrativo', 'Gerente', 'Gestor', 'Dev', 'CRM'];
 
 // Middleware para verificar se o usuário tem permissão para gerenciar funcionários
 const canManageFuncionarios = (req, res, next) => {
