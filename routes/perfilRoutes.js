@@ -93,22 +93,18 @@ router.get('/solicitar-upload-url', authMiddleware, async (req, res) => {
         return res.status(500).json({ success: false, message: 'Serviço de upload temporariamente indisponível. Configuração do Supabase Storage incompleta no servidor.' });
     }
     const userId = req.user.userId;
-    const fileName = req.query.fileName || 'profile.png'; // Frontend pode (opcionalmente) sugerir um nome
     // Usar um nome de arquivo consistente por usuário no Storage (ex: profile.png) simplifica
-    // ou adicionar um timestamp para versionamento/evitar cache.
-    // Para uma foto de perfil que sempre substitui a anterior, um nome fixo é bom.
     const supabaseFilePath = `${userId}/profile.png`; // Caminho no Supabase Storage
 
     try {
         const { data, error } = await supabaseAdmin.storage
-            .from('profile-pictures') // Nome do seu bucket
-            .createSignedUploadUrl(supabaseFilePath, 60 * 5); // URL válida por 5 minutos (300 segundos)
+            .from('profile-pictures') // Nome do seu bucket (corrigido para hífen, se for o caso)
+            .createSignedUploadUrl(supabaseFilePath, 300, { upsert: true }); // URL válida por 5 minutos (300s) e upsert: true
 
         if (error) {
             console.error(`Supabase error creating signed URL for userId ${userId}, path ${supabaseFilePath}:`, error);
             return res.status(500).json({ success: false, message: 'Erro ao gerar URL segura para upload.' });
         }
-        // O 'data.path' retornado pelo Supabase é o caminho que você passou (supabaseFilePath)
         res.json({ success: true, signedUrl: data.signedUrl, pathForConfirmation: data.path });
     } catch (e) {
         console.error(`Exception creating signed URL for userId ${userId}, path ${supabaseFilePath}:`, e);
