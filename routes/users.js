@@ -76,7 +76,7 @@ router.post('/', auth, authorizeAdminOrDev, async (req, res) => {
 // GET /users - Listar todos os usuários
 router.get('/', auth, authorizeAdminOrDev, async (req, res) => {
   try {
-    const result = await pool.query('SELECT id, email, nome, permissao, criado_em FROM usuarios ORDER BY nome ASC');
+    const result = await pool.query('SELECT id, email, nome, permissao, setor, ramal, modelo_trabalho, foto_perfil_url, criado_em FROM usuarios ORDER BY nome ASC');
     res.json({ success: true, users: result.rows });
   } catch (error) {
     console.error('Erro ao listar usuários:', error);
