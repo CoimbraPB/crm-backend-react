@@ -4,7 +4,14 @@ const authMiddleware = require('../middleware/auth'); // Certifique-se que o cam
 const pool = require('../config/database'); // Certifique-se que o caminho está correto
 
 router.get('/', authMiddleware, async (req, res) => {
-    const usuario_destino_id = req.user.id;
+    const usuario_destino_id = req.user.userId; // CORRIGIDO AQUI
+    console.log(`[GET /notificacoes] Buscando notificações para usuario_destino_id: ${usuario_destino_id}, QueryParams: ${JSON.stringify(req.query)}`);
+
+    if (!usuario_destino_id) {
+        console.error('[GET /notificacoes] Erro: ID do usuário não encontrado no token JWT.', req.user);
+        return res.status(401).json({ success: false, message: 'Não autorizado ou ID do usuário ausente no token.' });
+    }
+
     const apenasNaoLidas = req.query.apenas_nao_lidas === 'true';
     const limite = parseInt(req.query.limite) || 10;
     const offset = parseInt(req.query.offset) || 0;
@@ -26,11 +33,14 @@ router.get('/', authMiddleware, async (req, res) => {
         queryText += ` ORDER BY n.data_criacao DESC LIMIT $${++paramCount} OFFSET $${++paramCount}`;
         queryParams.push(limite, offset);
         
+        console.log(`[GET /notificacoes] Executando Query: ${queryText.replace(/\s+/g, ' ').trim()} com Params: ${JSON.stringify(queryParams)}`);
         const result = await pool.query(queryText, queryParams);
         
-        const countResult = await pool.query('SELECT COUNT(*) FROM notificacoes WHERE usuario_destino_id = $1 AND lida = FALSE', [usuario_destino_id]);
-        const contagemNaoLidas = parseInt(countResult.rows[0].count);
+        console.log(`[GET /notificacoes] Buscando contagem para usuario_destino_id: ${usuario_destino_id}`);
+        const countResult = await pool.query('SELECT COUNT(*) AS total_nao_lidas FROM notificacoes WHERE usuario_destino_id = $1 AND lida = FALSE', [usuario_destino_id]);
+        const contagemNaoLidas = parseInt(countResult.rows[0].total_nao_lidas);
 
+        console.log(`[GET /notificacoes] Resultado: ${result.rowCount} notificações, Contagem não lidas: ${contagemNaoLidas}`);
         res.json({ 
             success: true, 
             notificacoes: result.rows,
@@ -44,7 +54,14 @@ router.get('/', authMiddleware, async (req, res) => {
 });
 
 router.put('/marcar-como-lidas', authMiddleware, async (req, res) => {
-    const usuario_destino_id = req.user.id;
+    const usuario_destino_id = req.user.userId; // CORRIGIDO AQUI
+    console.log(`[PUT /marcar-como-lidas] Marcando como lidas para usuario_destino_id: ${usuario_destino_id}, Body: ${JSON.stringify(req.body)}`);
+
+    if (!usuario_destino_id) {
+        console.error('[PUT /marcar-como-lidas] Erro: ID do usuário não encontrado no token JWT.', req.user);
+        return res.status(401).json({ success: false, message: 'Não autorizado ou ID do usuário ausente no token.' });
+    }
+
     const { notificacao_ids } = req.body; 
 
     if (!notificacao_ids) {
@@ -54,6 +71,7 @@ router.put('/marcar-como-lidas', authMiddleware, async (req, res) => {
     try {
         let result;
         if (notificacao_ids === 'todas') {
+            console.log(`[PUT /marcar-como-lidas] Marcando TODAS como lidas para usuário ${usuario_destino_id}`);
             result = await pool.query(
                 'UPDATE notificacoes SET lida = TRUE WHERE usuario_destino_id = $1 AND lida = FALSE RETURNING id',
                 [usuario_destino_id]
@@ -63,6 +81,7 @@ router.put('/marcar-como-lidas', authMiddleware, async (req, res) => {
             if (idsNumericos.length === 0) {
                  return res.status(400).json({ success: false, message: 'Nenhum ID de notificação válido fornecido.' });
             }
+            console.log(`[PUT /marcar-como-lidas] Marcando IDs ${idsNumericos.join(', ')} como lidas para usuário ${usuario_destino_id}`);
             result = await pool.query(
                 'UPDATE notificacoes SET lida = TRUE WHERE usuario_destino_id = $1 AND id = ANY($2::int[]) AND lida = FALSE RETURNING id',
                 [usuario_destino_id, idsNumericos]
@@ -71,6 +90,7 @@ router.put('/marcar-como-lidas', authMiddleware, async (req, res) => {
             return res.status(400).json({ success: false, message: 'Formato de notificacao_ids inválido.' });
         }
         
+        console.log(`[PUT /marcar-como-lidas] ${result.rowCount} notificações marcadas como lidas.`);
         res.json({ success: true, message: `${result.rowCount} notificações marcadas como lidas.` });
     } catch (error) {
         console.error('Erro ao marcar notificações como lidas:', error);
@@ -79,12 +99,20 @@ router.put('/marcar-como-lidas', authMiddleware, async (req, res) => {
 });
 
 router.get('/contagem-nao-lidas', authMiddleware, async (req, res) => {
-    const usuario_destino_id = req.user.id;
+    const usuario_destino_id = req.user.userId; // CORRIGIDO AQUI
+    console.log(`[GET /contagem-nao-lidas] Buscando contagem para usuario_destino_id: ${usuario_destino_id}`);
+    
+    if (!usuario_destino_id) {
+        console.error('[GET /contagem-nao-lidas] Erro: ID do usuário não encontrado no token JWT.', req.user);
+        return res.status(401).json({ success: false, message: 'Não autorizado ou ID do usuário ausente no token.' });
+    }
+
     try {
         const result = await pool.query(
             'SELECT COUNT(*) AS contagem FROM notificacoes WHERE usuario_destino_id = $1 AND lida = FALSE',
             [usuario_destino_id]
         );
+        console.log(`[GET /contagem-nao-lidas] Resultado da contagem:`, result.rows[0]);
         res.json({ success: true, contagem: parseInt(result.rows[0].contagem) });
     } catch (error) {
         console.error('Erro ao buscar contagem de notificações não lidas:', error);
