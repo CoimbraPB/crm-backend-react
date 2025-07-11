@@ -21,7 +21,6 @@ const auth = (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    console.log('✅ Token JWT decodificado:', decoded); // <-- Adicionado este log
     req.user = decoded;
 
     next();

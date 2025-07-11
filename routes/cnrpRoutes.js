@@ -17,7 +17,6 @@ const criarNotificacao = async (tipo_notificacao, mensagem, usuario_destino_id, 
 };
 
 router.post('/', authMiddleware, async (req, res) => {
-    console.log('📦 Conteúdo de req.user na rota POST /cnrp:', req.user);
     const { data_ponto, entrada1, saida1, entrada2, saida2, motivo } = req.body;
     const usuario_solicitante_id = req.user.userId; // CORRIGIDO AQUI
     const nomeSolicitante = req.user.nome || `Usuário ID ${usuario_solicitante_id}`;
