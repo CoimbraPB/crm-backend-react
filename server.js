@@ -47,6 +47,12 @@ app.use('/perfil', require('./routes/perfilRoutes'));
 // NOVAS ROTAS PARA FUNCIONÁRIOS
 app.use('/funcionarios', require('./routes/funcionariosRoutes'));
 
+// NOVAS ROTAS PARA CNRP
+app.use('/cnrp', require('./routes/cnrpRoutes'));
+
+// NOVAS ROTAS PARA NOTIFICAÇÕES
+app.use('/notificacoes', require('./routes/notificacaoRoutes'));
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({ 
