@@ -17,10 +17,15 @@ const criarNotificacao = async (tipo_notificacao, mensagem, usuario_destino_id, 
 };
 
 router.post('/', authMiddleware, async (req, res) => {
-     console.log('📦 Conteúdo de req.user:', req.user); // <-- Aqui
+    console.log('📦 Conteúdo de req.user na rota POST /cnrp:', req.user);
     const { data_ponto, entrada1, saida1, entrada2, saida2, motivo } = req.body;
-    const usuario_solicitante_id = req.user.id;
+    const usuario_solicitante_id = req.user.userId; // CORRIGIDO AQUI
     const nomeSolicitante = req.user.nome || `Usuário ID ${usuario_solicitante_id}`;
+
+    if (!usuario_solicitante_id) {
+        console.error('Erro CRÍTICO: usuario_solicitante_id é undefined ou null após ler de req.user.userId. Conteúdo de req.user:', req.user);
+        return res.status(401).json({ success: false, message: 'Falha na autenticação: ID do usuário não determinado.' });
+    }
 
     if (!data_ponto || !motivo) {
         return res.status(400).json({ success: false, message: 'Data do ponto e motivo são obrigatórios.' });
@@ -34,7 +39,7 @@ router.post('/', authMiddleware, async (req, res) => {
         const novaSolicitacao = result.rows[0];
 
         const usuariosRhResult = await pool.query("SELECT id FROM usuarios WHERE permissao = ANY($1::varchar[])", [PERMISSOES_RH]);
-        
+
         for (const rhUser of usuariosRhResult.rows) {
             await criarNotificacao(
                 'NOVA_CNRP_PARA_RH',
@@ -49,12 +54,16 @@ router.post('/', authMiddleware, async (req, res) => {
         res.status(201).json({ success: true, message: 'Solicitação CNRP criada com sucesso!', solicitacao: novaSolicitacao });
     } catch (error) {
         console.error('Erro ao criar solicitação CNRP:', error);
-        res.status(500).json({ success: false, message: 'Erro interno do servidor ao criar solicitação.' });
+        const errorMessage = process.env.NODE_ENV !== 'production' ? error.message : 'Erro interno do servidor ao criar solicitação.';
+        res.status(500).json({ success: false, message: errorMessage, detail: process.env.NODE_ENV !== 'production' ? error.detail : undefined });
     }
 });
 
 router.get('/minhas', authMiddleware, async (req, res) => {
-    const usuario_solicitante_id = req.user.id;
+    const usuario_solicitante_id = req.user.userId; // CORRIGIDO AQUI
+    if (!usuario_solicitante_id) {
+        return res.status(401).json({ success: false, message: 'Falha na autenticação: ID do usuário não determinado.' });
+    }
     try {
         const result = await pool.query(
             'SELECT * FROM solicitacoes_cnrp WHERE usuario_solicitante_id = $1 ORDER BY data_criacao DESC',
@@ -70,7 +79,7 @@ router.get('/minhas', authMiddleware, async (req, res) => {
 router.get('/gerenciamento', authMiddleware, async (req, res) => {
     const { status, dataInicio, dataFim, usuarioId } = req.query;
     let queryText = `
-        SELECT sc.*, u.nome AS nome_solicitante, u.email AS email_solicitante 
+        SELECT sc.*, u.nome AS nome_solicitante, u.email AS email_solicitante
         FROM solicitacoes_cnrp sc
         JOIN usuarios u ON sc.usuario_solicitante_id = u.id
     `;
@@ -111,8 +120,12 @@ router.get('/gerenciamento', authMiddleware, async (req, res) => {
 router.put('/:id/status', authMiddleware, async (req, res) => {
     const { id } = req.params;
     const { status, observacao_rh } = req.body;
-    const modificado_por_rh_id = req.user.id;
+    const modificado_por_rh_id = req.user.userId; // CORRIGIDO AQUI
     const nomeModificador = req.user.nome || `Usuário ID ${modificado_por_rh_id}`;
+
+    if (!modificado_por_rh_id) {
+        return res.status(401).json({ success: false, message: 'Falha na autenticação: ID do usuário não determinado.' });
+    }
 
     if (!status || !['Pendente', 'Em Análise', 'Concluído', 'Recusado'].includes(status)) {
         return res.status(400).json({ success: false, message: 'Status inválido fornecido.' });
@@ -128,7 +141,7 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
             return res.status(404).json({ success: false, message: 'Solicitação CNRP não encontrada.' });
         }
         const solicitacaoAtualizada = result.rows[0];
-        
+
         let tipoNotificacao = 'STATUS_CNRP_ATUALIZADO_SOLICITANTE';
         if (status === 'Recusado') {
             tipoNotificacao = 'CNRP_RECUSADA_SOLICITANTE';
@@ -148,7 +161,8 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
         res.json({ success: true, message: 'Status da solicitação CNRP atualizado com sucesso!', solicitacao: solicitacaoAtualizada });
     } catch (error) {
         console.error('Erro ao atualizar status da solicitação CNRP:', error);
-        res.status(500).json({ success: false, message: 'Erro interno do servidor.' });
+        const errorMessage = process.env.NODE_ENV !== 'production' ? error.message : 'Erro interno do servidor ao atualizar status.';
+        res.status(500).json({ success: false, message: errorMessage, detail: process.env.NODE_ENV !== 'production' ? error.detail : undefined });
     }
 });
 
