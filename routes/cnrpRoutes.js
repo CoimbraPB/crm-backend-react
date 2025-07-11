@@ -3,7 +3,7 @@ const router = express.Router();
 const authMiddleware = require('../middleware/auth'); // Certifique-se que o caminho está correto
 const pool = require('../config/database'); // Certifique-se que o caminho está correto
 
-const PERMISSOES_RH = ['RH', 'Dev']; // Ajuste se necessário
+const PERMISSOES_RH = ['RH']; // Ajuste se necessário
 
 const criarNotificacao = async (tipo_notificacao, mensagem, usuario_destino_id, referencia_id = null, link_frontend = null, criado_por_id = null) => {
     try {
