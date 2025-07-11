@@ -67,7 +67,7 @@ app.get('/', (req, res) => {
   res.json({ 
     message: 'CRM Backend API',
     version: '1.0.0',
-    endpoints: ['/auth/login', '/auth/verify', '/clients', '/faturamentos', '/crm-occurrences', '/gestor-occurrences', '/users', '/audit-logs', '/health', '/cargos', '/setores', '/configuracao-analise', '/alocacao-esforco', '/analise-contratual', '/associacoes'] 
+    endpoints: ['/auth/login', '/auth/verify', '/clients', '/faturamentos', '/crm-occurrences', '/gestor-occurrences', '/users', '/audit-logs', '/health', '/cargos', '/setores', '/configuracao-analise', '/alocacao-esforco', '/analise-contratual', '/associacoes', ] 
   });
 });
 

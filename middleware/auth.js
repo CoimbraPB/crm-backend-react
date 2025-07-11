@@ -21,11 +21,13 @@ const auth = (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    console.log('✅ Token JWT decodificado:', decoded); // <-- Adicionado este log
     req.user = decoded;
+
     next();
 
   } catch (error) {
-    console.error('Token verification error:', error);
+    console.error('❌ Erro ao verificar o token:', error);
     res.status(401).json({
       success: false,
       message: 'Token inválido'
