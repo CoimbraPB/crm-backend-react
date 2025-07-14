@@ -141,11 +141,11 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
         }
         const solicitacaoAtualizada = result.rows[0];
 
-        let tipoNotificacao = 'STATUS_CNRP_ATUALIZADO_SOLICITANTE';
+        let tipoNotificacao = 'Status CNRP Atualizado';
         if (status === 'Recusado') {
-            tipoNotificacao = 'CNRP_RECUSADA_SOLICITANTE';
+            tipoNotificacao = 'Status CNRP Atualizado';
         } else if (status === 'Concluído') {
-            tipoNotificacao = 'CNRP_CONCLUIDA_SOLICITANTE';
+            tipoNotificacao = 'Status CNRP Atualizado';
         }
 
         await criarNotificacao(
