@@ -41,7 +41,7 @@ router.post('/', authMiddleware, async (req, res) => {
 
         for (const rhUser of usuariosRhResult.rows) {
             await criarNotificacao(
-                'NOVA_CNRP_PARA_RH',
+                'CNRP',
                 `Nova solicitação CNRP de ${nomeSolicitante} para a data ${new Date(data_ponto).toLocaleDateString('pt-BR')}.`,
                 rhUser.id,
                 novaSolicitacao.id,
