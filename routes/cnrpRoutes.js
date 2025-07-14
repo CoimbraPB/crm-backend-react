@@ -1,9 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const authMiddleware = require('../middleware/auth'); // Certifique-se que o caminho está correto
-const pool = require('../config/database'); // Certifique-se que o caminho está correto
+const authMiddleware = require('../middleware/auth');
+const pool = require('../config/database');
 
-const PERMISSOES_RH = ['RH']; // Ajuste se necessário
+const PERMISSOES_RH = ['RH'];
 
 const criarNotificacao = async (tipo_notificacao, mensagem, usuario_destino_id, referencia_id = null, link_frontend = null, criado_por_id = null) => {
     try {
@@ -17,8 +17,8 @@ const criarNotificacao = async (tipo_notificacao, mensagem, usuario_destino_id, 
 };
 
 router.post('/', authMiddleware, async (req, res) => {
-    const { data_ponto, entrada1, saida1, entrada2, saida2, motivo } = req.body;
-    const usuario_solicitante_id = req.user.userId; // CORRIGIDO AQUI
+    const { data_ponto, entrada1, saida1, entrada2, saida2, motivo, extra1, extra2 } = req.body;
+    const usuario_solicitante_id = req.user.userId;
     const nomeSolicitante = req.user.nome || `Usuário ID ${usuario_solicitante_id}`;
 
     if (!usuario_solicitante_id) {
@@ -32,8 +32,8 @@ router.post('/', authMiddleware, async (req, res) => {
 
     try {
         const result = await pool.query(
-            'INSERT INTO solicitacoes_cnrp (usuario_solicitante_id, data_ponto, entrada1, saida1, entrada2, saida2, motivo) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
-            [usuario_solicitante_id, data_ponto, entrada1 || null, saida1 || null, entrada2 || null, saida2 || null, motivo]
+            'INSERT INTO solicitacoes_cnrp (usuario_solicitante_id, data_ponto, entrada1, saida1, entrada2, saida2, motivo, extra1, extra2) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *',
+            [usuario_solicitante_id, data_ponto, entrada1 || null, saida1 || null, entrada2 || null, saida2 || null, motivo, extra1 || null, extra2 || null]
         );
         const novaSolicitacao = result.rows[0];
 
@@ -59,7 +59,7 @@ router.post('/', authMiddleware, async (req, res) => {
 });
 
 router.get('/minhas', authMiddleware, async (req, res) => {
-    const usuario_solicitante_id = req.user.userId; // CORRIGIDO AQUI
+    const usuario_solicitante_id = req.user.userId;
     if (!usuario_solicitante_id) {
         return res.status(401).json({ success: false, message: 'Falha na autenticação: ID do usuário não determinado.' });
     }
@@ -119,7 +119,7 @@ router.get('/gerenciamento', authMiddleware, async (req, res) => {
 router.put('/:id/status', authMiddleware, async (req, res) => {
     const { id } = req.params;
     const { status, observacao_rh } = req.body;
-    const modificado_por_rh_id = req.user.userId; // CORRIGIDO AQUI
+    const modificado_por_rh_id = req.user.userId;
     const nomeModificador = req.user.nome || `Usuário ID ${modificado_por_rh_id}`;
 
     if (!modificado_por_rh_id) {
@@ -139,17 +139,11 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
         if (result.rowCount === 0) {
             return res.status(404).json({ success: false, message: 'Solicitação CNRP não encontrada.' });
         }
+
         const solicitacaoAtualizada = result.rows[0];
 
-        let tipoNotificacao = 'Status CNRP Atualizado';
-        if (status === 'Recusado') {
-            tipoNotificacao = 'Status CNRP Atualizado';
-        } else if (status === 'Concluído') {
-            tipoNotificacao = 'Status CNRP Atualizado';
-        }
-
         await criarNotificacao(
-            tipoNotificacao,
+            'Status CNRP Atualizado',
             `Status da sua CNRP (${new Date(solicitacaoAtualizada.data_ponto).toLocaleDateString('pt-BR')}) atualizado para: ${status} por ${nomeModificador}. ${observacao_rh ? 'Obs: ' + observacao_rh : ''}`,
             solicitacaoAtualizada.usuario_solicitante_id,
             solicitacaoAtualizada.id,
