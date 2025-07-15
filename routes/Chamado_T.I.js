@@ -130,10 +130,7 @@ router.get('/gerenciamento', authMiddleware, async (req, res) => {
 
 // Atualizar o status de um chamado
 router.put('/:id/status', authMiddleware, async (req, res) => {
-    // Verificação de permissão
-    if (!req.user.permissoes || !req.user.permissoes.some(p => PERMISSOES_TI.includes(p))) {
-        return res.status(403).json({ success: false, message: 'Acesso negado. Você não tem permissão para acessar este recurso.' });
-    }
+
 
     const { id } = req.params;
     const { status } = req.body;
@@ -175,9 +172,7 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
 // Adicionar ou atualizar uma observação em um chamado
 router.put('/:id/observacao', authMiddleware, async (req, res) => {
     // Verificação de permissão
-    if (!req.user.permissoes || !req.user.permissoes.some(p => PERMISSOES_TI.includes(p))) {
-        return res.status(403).json({ success: false, message: 'Acesso negado. Você não tem permissão para acessar este recurso.' });
-    }
+
 
     const { id } = req.params;
     const { observacao } = req.body;
