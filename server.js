@@ -53,6 +53,9 @@ app.use('/cnrp', require('./routes/cnrpRoutes'));
 // NOVAS ROTAS PARA NOTIFICAÇÕES
 app.use('/notificacoes', require('./routes/notificacaoRoutes'));
 
+// NOVAS ROTAS PARA CHAMADOS T.I.
+app.use('/chamados-ti', require('./routes/Chamado_T.I'));
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({ 
