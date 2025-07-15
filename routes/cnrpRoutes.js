@@ -76,8 +76,12 @@ router.get('/minhas', authMiddleware, async (req, res) => {
 });
 
 router.get('/gerenciamento', authMiddleware, async (req, res) => {
-    // Adicionado 'nome' para ser lido da requisição
-    const { status, dataInicio, dataFim, usuarioId, nome } = req.query; 
+    const { status, dataInicio, dataFim, usuarioId, nome } = req.query;
+
+    // --- LOGS PARA DEPURAÇÃO ---
+    console.log("Query recebida no backend:", req.query);
+    console.log("Valor do parâmetro 'nome':", nome);
+    // ---------------------------
 
     let queryText = `
         SELECT sc.*, u.nome AS nome_solicitante, u.email AS email_solicitante
@@ -103,19 +107,23 @@ router.get('/gerenciamento', authMiddleware, async (req, res) => {
         queryParams.push(usuarioId);
         conditions.push(`sc.usuario_solicitante_id = $${queryParams.length}`);
     }
-    
-    // **NOVO BLOCO PARA FILTRAR POR NOME**
-    if (nome) {
-        // Adiciona os wildcards '%' para busca parcial e case-insensitive
-        queryParams.push(`%${nome}%`); 
-        // Usa ILIKE para busca que não diferencia maiúsculas/minúsculas
-        conditions.push(`u.nome ILIKE $${queryParams.length}`); 
+
+    // Condição de busca por nome ajustada para ser mais robusta
+    if (nome && nome.trim() !== '') {
+        console.log(`>>> APLICANDO FILTRO por nome: ${nome}`);
+        queryParams.push(`%${nome.trim()}%`);
+        conditions.push(`u.nome ILIKE $${queryParams.length}`);
     }
 
     if (conditions.length > 0) {
         queryText += ' WHERE ' + conditions.join(' AND ');
     }
     queryText += ' ORDER BY sc.data_criacao DESC';
+
+    // --- LOGS DA QUERY FINAL ---
+    console.log("Query SQL a ser executada:", queryText);
+    console.log("Parâmetros da Query:", queryParams);
+    // ---------------------------
 
     try {
         const result = await pool.query(queryText, queryParams);
