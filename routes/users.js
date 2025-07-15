@@ -43,7 +43,7 @@ router.post('/', auth, authorizeAdminOrDev, async (req, res) => {
     return res.status(400).json({ success: false, message: 'Todos os campos são obrigatórios.' });
   }
 
-  const validPermissions = ['Dev', 'Gerente', 'Operador', 'Gestor', 'Administrativo', 'CRM', 'Fiscal'];
+  const validPermissions = ['Dev', 'Gerente', 'Operador', 'Gestor', 'Administrativo', 'CRM', 'Fiscal', 'RH', 'Tecnologia'];
   if (!validPermissions.includes(permissao)) {
     return res.status(400).json({ success: false, message: 'Permissão inválida.' });
   }
