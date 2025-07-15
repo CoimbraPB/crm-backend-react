@@ -3,7 +3,7 @@ const router = express.Router();
 const authMiddleware = require('../middleware/auth');
 const pool = require('../config/database');
 
-const PERMISSOES_TI = ['Tecnologia', 'Gestor', 'Dev', 'Gerente'];
+const PERMISSOES_TI = ['Tecnologia']; // Apenas 'Tecnologia' receberá notificações
 
 const criarNotificacao = async (tipo_notificacao, mensagem, usuario_destino_id, referencia_id = null, link_frontend = null, criado_por_id = null) => {
     try {
@@ -77,11 +77,8 @@ router.get('/minhas', authMiddleware, async (req, res) => {
 
 // Listar todos os chamados para a equipe de T.I. (com filtros)
 router.get('/gerenciamento', authMiddleware, async (req, res) => {
-    // Verificação de permissão
-    if (!req.user.permissoes || !req.user.permissoes.some(p => PERMISSOES_TI.includes(p))) {
-        return res.status(403).json({ success: false, message: 'Acesso negado. Você não tem permissão para acessar este recurso.' });
-    }
-
+    // Verificação de permissão REMOVIDA
+    
     const { status, categoria, prioridade, dataInicio, dataFim, nome } = req.query;
 
     let queryText = `
