@@ -76,7 +76,9 @@ router.get('/minhas', authMiddleware, async (req, res) => {
 });
 
 router.get('/gerenciamento', authMiddleware, async (req, res) => {
-    const { status, dataInicio, dataFim, usuarioId } = req.query;
+    // Adicionado 'nome' para ser lido da requisição
+    const { status, dataInicio, dataFim, usuarioId, nome } = req.query; 
+
     let queryText = `
         SELECT sc.*, u.nome AS nome_solicitante, u.email AS email_solicitante
         FROM solicitacoes_cnrp sc
@@ -100,6 +102,14 @@ router.get('/gerenciamento', authMiddleware, async (req, res) => {
     if (usuarioId) {
         queryParams.push(usuarioId);
         conditions.push(`sc.usuario_solicitante_id = $${queryParams.length}`);
+    }
+    
+    // **NOVO BLOCO PARA FILTRAR POR NOME**
+    if (nome) {
+        // Adiciona os wildcards '%' para busca parcial e case-insensitive
+        queryParams.push(`%${nome}%`); 
+        // Usa ILIKE para busca que não diferencia maiúsculas/minúsculas
+        conditions.push(`u.nome ILIKE $${queryParams.length}`); 
     }
 
     if (conditions.length > 0) {
