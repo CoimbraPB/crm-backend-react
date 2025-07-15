@@ -120,11 +120,6 @@ router.get('/gerenciamento', authMiddleware, async (req, res) => {
     }
     queryText += ' ORDER BY sc.data_criacao DESC';
 
-    // --- LOGS DA QUERY FINAL ---
-    console.log("Query SQL a ser executada:", queryText);
-    console.log("Parâmetros da Query:", queryParams);
-    // ---------------------------
-
     try {
         const result = await pool.query(queryText, queryParams);
         res.json({ success: true, solicitacoes: result.rows });
