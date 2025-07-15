@@ -77,9 +77,7 @@ router.get('/minhas', authMiddleware, async (req, res) => {
 
 // Listar todos os chamados para a equipe de T.I. (com filtros)
 router.get('/gerenciamento', authMiddleware, async (req, res) => {
-    // Verificação de permissão REMOVIDA
-    
-    const { status, categoria, prioridade, dataInicio, dataFim, nome } = req.query;
+    const { status, categoria, prioridade, dataInicio, dataFim, nome, setor } = req.query; // Adicionado 'setor'
 
     let queryText = `
         SELECT c.*, u.nome AS nome_solicitante, u.setor AS setor_solicitante
@@ -112,6 +110,10 @@ router.get('/gerenciamento', authMiddleware, async (req, res) => {
     if (nome && nome.trim() !== '') {
         queryParams.push(`%${nome.trim()}%`);
         conditions.push(`u.nome ILIKE $${queryParams.length}`);
+    }
+    if (setor) { // Adicionada a condição para o filtro de setor
+        queryParams.push(setor);
+        conditions.push(`u.setor = $${queryParams.length}`);
     }
 
     if (conditions.length > 0) {
