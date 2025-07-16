@@ -47,8 +47,9 @@ app.use('/perfil', require('./routes/perfilRoutes'));
 // NOVAS ROTAS PARA FUNCIONÁRIOS
 app.use('/funcionarios', require('./routes/funcionariosRoutes'));
 
-// NOVAS ROTAS PARA CNRP
+// NOVAS ROTAS PARA RH
 app.use('/cnrp', require('./routes/cnrpRoutes'));
+app.use('/solicitacoes', require('./routes/solicitacoes'));
 
 // NOVAS ROTAS PARA NOTIFICAÇÕES
 app.use('/notificacoes', require('./routes/notificacaoRoutes'));
