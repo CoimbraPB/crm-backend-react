@@ -104,7 +104,7 @@ router.post('/', auth, async (req, res) => {
 
     // Validação de enums
     const validRegimeFiscal = ['Simples Nacional', 'Lucro Presumido', 'Lucro Real'];
-    const validSituacao = ['Com movimento', 'Sem movimento'];
+    const validSituacao = ['Com movimento', 'Sem movimento', 'Baixada'];
     const validTipoPessoa = ['Física', 'Jurídica'];
     const validStatus = ['Ativo', 'Inativo', 'Potencial', 'Bloqueado'];
     const validPossuiIe = ['Sim', 'Não', 'Isento']; // Mantido 'Não'
@@ -232,7 +232,7 @@ router.put('/:id', auth, async (req, res) => {
 
     // Validação de enums
     const validRegimeFiscal = ['Simples Nacional', 'Lucro Presumido', 'Lucro Real'];
-    const validSituacao = ['Com movimento', 'Sem movimento'];
+    const validSituacao = ['Com movimento', 'Sem movimento', 'Baixada'];
     const validTipoPessoa = ['Física', 'Jurídica'];
     const validStatus = ['Ativo', 'Inativo', 'Potencial', 'Bloqueado'];
     const validPossuiIe = ['Sim', 'Não', 'Isento']; // Mantido 'Não'
