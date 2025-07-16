@@ -26,7 +26,7 @@ const authorizeDevOnly = (req, res, next) => {
 
 // 👁️ Permissão: leitura (CRM, Operador, Fiscal, Gerente, Gestor, Dev)
 const authorizeReadOnlyUsers = (req, res, next) => {
-  const allowed = ['CRM', 'Operador', 'Fiscal', 'Gerente', 'Gestor', 'Dev'];
+  const allowed = ['CRM', 'Operador', 'Fiscal', 'Gerente', 'Gestor', 'Dev', 'Administrativo', 'RH', 'Tecnologia'];
   if (req.user && allowed.includes(req.user.permissao)) {
     next();
   } else {

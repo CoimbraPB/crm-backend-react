@@ -87,7 +87,7 @@ router.post('/login', async (req, res) => {
 router.get('/verify', auth, async (req, res) => {
   try {
     const result = await pool.query(
-      'SELECT id, email, nome, permissao FROM usuarios WHERE id = $1',
+      'SELECT id, email, nome, permissao, foto_perfil_url FROM usuarios WHERE id = $1',
       [req.user.userId]
     );
 
