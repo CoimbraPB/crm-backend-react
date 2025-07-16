@@ -124,7 +124,7 @@ router.put('/:id', auth, authorizeAdminOrDev, async (req, res) => {
     return res.status(400).json({ success: false, message: 'Informe nome, email ou permissão para atualizar.' });
   }
 
-  const validPermissions = ['Dev', 'Gerente', 'Operador', 'Gestor', 'Administrativo', 'CRM', 'Fiscal'];
+  const validPermissions = ['Dev', 'Gerente', 'Operador', 'Gestor', 'Administrativo', 'CRM', 'Fiscal', 'RH', 'Tecnologia'];
   if (permissao && !validPermissions.includes(permissao)) {
     return res.status(400).json({ success: false, message: 'Permissão inválida.' });
   }

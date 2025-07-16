@@ -26,7 +26,6 @@ const auth = (req, res, next) => {
     next();
 
   } catch (error) {
-    console.error('❌ Erro ao verificar o token:', error);
     res.status(401).json({
       success: false,
       message: 'Token inválido'

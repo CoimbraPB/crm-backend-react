@@ -78,11 +78,6 @@ router.get('/minhas', authMiddleware, async (req, res) => {
 router.get('/gerenciamento', authMiddleware, async (req, res) => {
     const { status, dataInicio, dataFim, usuarioId, nome } = req.query;
 
-    // --- LOGS PARA DEPURAÇÃO ---
-    console.log("Query recebida no backend:", req.query);
-    console.log("Valor do parâmetro 'nome':", nome);
-    // ---------------------------
-
     let queryText = `
         SELECT sc.*, u.nome AS nome_solicitante, u.email AS email_solicitante
         FROM solicitacoes_cnrp sc
@@ -110,7 +105,6 @@ router.get('/gerenciamento', authMiddleware, async (req, res) => {
 
     // Condição de busca por nome ajustada para ser mais robusta
     if (nome && nome.trim() !== '') {
-        console.log(`>>> APLICANDO FILTRO por nome: ${nome}`);
         queryParams.push(`%${nome.trim()}%`);
         conditions.push(`u.nome ILIKE $${queryParams.length}`);
     }
