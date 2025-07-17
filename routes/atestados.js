@@ -126,16 +126,26 @@ router.get('/usuario/:id', auth, async (req, res) => {
     }
 });
 
-// Rota para buscar todos os atestados (para tela de gerenciamento)
+// Rota para buscar todos os atestados (para tela de gerenciamento) com filtro por nome
 router.get('/todos', auth, authorizeUploader, async (req, res) => {
+    const { nome } = req.query;
+
     try {
-        const query = `
+        let query = `
             SELECT a.*, u.nome as nome_colaborador 
             FROM atestados a
             JOIN usuarios u ON a.usuario_id = u.id
-            ORDER BY a.data_envio DESC
         `;
-        const { rows } = await pool.query(query);
+        const values = [];
+
+        if (nome) {
+            query += ' WHERE u.nome ILIKE $1';
+            values.push(`%${nome}%`);
+        }
+
+        query += ' ORDER BY a.data_envio DESC';
+        
+        const { rows } = await pool.query(query, values);
         res.json({ success: true, atestados: rows });
     } catch (error) {
         console.error('Erro ao buscar todos os atestados:', error);
