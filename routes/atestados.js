@@ -111,7 +111,13 @@ router.get('/usuario/:id', auth, async (req, res) => {
     }
 
     try {
-        const query = 'SELECT * FROM atestados WHERE usuario_id = $1 ORDER BY data_inicio_atestado DESC';
+        const query = `
+            SELECT a.*, u.nome as nome_colaborador 
+            FROM atestados a
+            JOIN usuarios u ON a.usuario_id = u.id
+            WHERE a.usuario_id = $1 
+            ORDER BY a.data_inicio_atestado DESC
+        `;
         const { rows } = await pool.query(query, [id]);
         res.json({ success: true, atestados: rows });
     } catch (error) {
