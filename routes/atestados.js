@@ -20,13 +20,13 @@ const authorizeUploader = (req, res, next) => {
   }
 };
 
-router.post('/solicitar-upload-url', auth, authorizeUploader, async (req, res) => {
+router.post('/solicitar-upload-url', auth, async (req, res) => { // Removido authorizeUploader
     if (!supabaseAdmin) {
         return res.status(500).json({ success: false, message: 'Serviço de upload indisponível.' });
     }
 
-    const { fileName, colaboradorId } = req.body;
-    const gestorId = req.user.userId;
+    const { fileName } = req.body;
+    const colaboradorId = req.user.userId; // O colaborador é o próprio usuário
 
     if (!fileName || !colaboradorId) {
         return res.status(400).json({ success: false, message: 'Nome do arquivo e ID do colaborador são obrigatórios.' });
@@ -43,7 +43,7 @@ router.post('/solicitar-upload-url', auth, authorizeUploader, async (req, res) =
     }
 
     const fileExtension = fileName.split('.').pop();
-    const uniqueFileName = `${colaboradorId}/${new Date().getTime()}_${gestorId}.${fileExtension}`;
+    const uniqueFileName = `${colaboradorId}/${new Date().getTime()}.${fileExtension}`;
 
     const { data, error } = await supabaseAdmin.storage
         .from('atestados')
@@ -61,11 +61,12 @@ router.post('/solicitar-upload-url', auth, authorizeUploader, async (req, res) =
     });
 });
 
-router.post('/confirmar-upload', auth, authorizeUploader, async (req, res) => {
-    const { pathForConfirmation, colaboradorId, dataInicio, diasAfastamento, observacoes } = req.body;
+router.post('/confirmar-upload', auth, async (req, res) => {
+    const { pathForConfirmation, dataInicio, tipoAfastamento, observacoes } = req.body;
+    const colaboradorId = req.user.userId;
     const gestorId = req.user.userId;
 
-    if (!pathForConfirmation || !colaboradorId || !dataInicio || !diasAfastamento) {
+    if (!pathForConfirmation || !colaboradorId || !dataInicio || !tipoAfastamento) {
         return res.status(400).json({ success: false, message: 'Dados incompletos para confirmar.' });
     }
 
@@ -79,12 +80,12 @@ router.post('/confirmar-upload', auth, authorizeUploader, async (req, res) => {
 
         const query = `
             INSERT INTO atestados 
-            (usuario_id, gestor_envio_id, url_atestado, nome_arquivo, data_inicio_atestado, dias_afastamento, observacoes)
+            (usuario_id, gestor_envio_id, url_atestado, nome_arquivo, data_inicio_atestado, tipo_afastamento, observacoes)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING id;
         `;
         
-        const values = [colaboradorId, gestorId, publicUrl, fileName, dataInicio, diasAfastamento, observacoes || null];
+        const values = [colaboradorId, gestorId, publicUrl, fileName, dataInicio, tipoAfastamento, observacoes || null];
         
         const result = await pool.query(query, values);
 
@@ -139,15 +140,38 @@ router.get('/todos', auth, authorizeUploader, async (req, res) => {
 // Rota para atualizar o status de um atestado
 router.put('/:id/status', auth, authorizeUploader, async (req, res) => {
     const { id } = req.params;
-    const { status } = req.body;
+    const { status, quantidade_afastamento } = req.body;
 
-    if (!['Aprovado', 'Rejeitado', 'Pendente'].includes(status)) {
+    if (status && !['Aprovado', 'Rejeitado', 'Pendente'].includes(status)) {
         return res.status(400).json({ success: false, message: 'Status inválido.' });
+    }
+    
+    if (quantidade_afastamento && isNaN(parseFloat(quantidade_afastamento))) {
+        return res.status(400).json({ success: false, message: 'Quantidade de afastamento inválida.' });
     }
 
     try {
-        const query = 'UPDATE atestados SET status = $1 WHERE id = $2 RETURNING *';
-        const { rows } = await pool.query(query, [status, id]);
+        const updates = [];
+        const values = [];
+        let paramIndex = 1;
+
+        if (status) {
+            updates.push(`status = $${paramIndex++}`);
+            values.push(status);
+        }
+        if (quantidade_afastamento) {
+            updates.push(`quantidade_afastamento = $${paramIndex++}`);
+            values.push(quantidade_afastamento);
+        }
+
+        if (updates.length === 0) {
+            return res.status(400).json({ success: false, message: 'Nenhum dado para atualizar.' });
+        }
+
+        values.push(id);
+        const query = `UPDATE atestados SET ${updates.join(', ')} WHERE id = $${paramIndex} RETURNING *`;
+
+        const { rows } = await pool.query(query, values);
 
         if (rows.length === 0) {
             return res.status(404).json({ success: false, message: 'Atestado não encontrado.' });
