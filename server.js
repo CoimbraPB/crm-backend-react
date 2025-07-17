@@ -50,6 +50,7 @@ app.use('/funcionarios', require('./routes/funcionariosRoutes'));
 // NOVAS ROTAS PARA RH
 app.use('/cnrp', require('./routes/cnrpRoutes'));
 app.use('/solicitacoes', require('./routes/solicitacoes'));
+app.use('/atestados', require('./routes/atestados'));
 
 // NOVAS ROTAS PARA NOTIFICAÇÕES
 app.use('/notificacoes', require('./routes/notificacaoRoutes'));
