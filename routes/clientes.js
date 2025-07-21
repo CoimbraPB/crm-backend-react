@@ -13,20 +13,44 @@ router.get('/matrizes', auth, async (req, res) => {
         id, 
         codigo, 
         nome, 
-        razao_social,
-        filial 
+        razao_social, 
+        cpf_cnpj, 
+        regime_fiscal, 
+        situacao, 
+        tipo_pessoa, 
+        estado, 
+        municipio, 
+        status, 
+        possui_ie, 
+        ie, 
+        filial, 
+        empresa_matriz, 
+        grupo, 
+        segmento, 
+        data_entrada, 
+        data_saida, 
+        sistema, 
+        tipo_servico, 
+        created_at,
+        resp_fiscal,
+        resp_contabil,
+        resp_dp
       FROM clientes
       WHERE filial = 'Não' OR filial = 'Nao' -- Adicionando 'Nao' sem acento por segurança
       ORDER BY nome ASC
     `);
 
-    // Não é necessário mapear/transformar os dados aqui, pois são simples.
-    // Apenas retornamos os campos necessários para o frontend.
-    res.json(result.rows);
+    const clients = result.rows.map(client => ({
+      ...client,
+      data_entrada: client.data_entrada ? client.data_entrada.toISOString() : null,
+      data_saida: client.data_saida ? client.data_saida.toISOString() : null,
+      tipo_servico: client.tipo_servico || [],
+      created_at: client.created_at ? client.created_at.toISOString() : null,
+    }));
+
+    res.json(clients);
   } catch (error) {
     console.error('Erro ao listar clientes matrizes:', error);
-    // Log de auditoria para falha, se desejar
-    // await logAction(req.user?.userId, req.user?.email, 'CLIENT_MATRIZ_LIST_FAILED', ENTITY_TYPES.CLIENT, null, { error: error.message });
     res.status(500).json({ success: false, message: 'Erro interno ao listar clientes matrizes.' });
   }
 });
