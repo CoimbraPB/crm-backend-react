@@ -24,6 +24,7 @@ router.get('/com-cliente', auth, async (req, res) => {
         c.codigo as cliente_codigo 
       FROM contatos_societarios cs
       JOIN clientes c ON cs.cliente_id = c.id
+      WHERE c.filial = 'Não'
       ORDER BY c.nome, cs.nome
     `;
     const result = await pool.query(queryText);
