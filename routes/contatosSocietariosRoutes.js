@@ -64,9 +64,9 @@ router.get('/cliente/:cliente_id', auth, async (req, res) => {
   }
 });
 
-// ROTA DE BUSCA DE CLIENTES POR CONTATO
+// ROTA DE BUSCA DE CLIENTES POR CONTATO (COM PAGINAÇÃO E FILTROS)
 router.get('/search/clientes-por-contato', auth, async (req, res) => {
-  const { q } = req.query;
+  const { q, page = 1, limit = 10 } = req.query;
 
   if (!q || String(q).trim() === '') {
     return res.status(400).json({ success: false, message: 'O termo de busca (q) é obrigatório.' });
@@ -74,28 +74,49 @@ router.get('/search/clientes-por-contato', auth, async (req, res) => {
 
   const searchTerm = String(q).trim();
   const searchTermDigits = searchTerm.replace(/\D/g, '');
+  const offset = (page - 1) * limit;
 
   try {
-    // cs.* incluirá o novo campo telefone automaticamente
     const queryText = `
       SELECT DISTINCT ON (c.id)
         c.*, 
         cs.nome as matched_contato_nome,
         cs.cpf as matched_contato_cpf,
-        cs.telefone as matched_contato_telefone -- Adicionado telefone do contato que deu match
+        cs.telefone as matched_contato_telefone
       FROM clientes c
       JOIN contatos_societarios cs ON c.id = cs.cliente_id
       WHERE 
         cs.nome ILIKE $1 OR 
         cs.cpf = $2 
-      ORDER BY c.id, c.nome;
+      ORDER BY c.id, c.nome
+      LIMIT $3 OFFSET $4;
     `;
-    const result = await pool.query(queryText, [`%${searchTerm}%`, searchTermDigits]);
+    
+    const countQueryText = `
+      SELECT COUNT(DISTINCT c.id)
+      FROM clientes c
+      JOIN contatos_societarios cs ON c.id = cs.cliente_id
+      WHERE 
+        cs.nome ILIKE $1 OR 
+        cs.cpf = $2;
+    `;
 
-    if (result.rows.length === 0) {
-      return res.json({ success: true, message: 'Nenhum cliente encontrado para o contato informado.', clientes: [] });
-    }
-    res.json({ success: true, clientes: result.rows });
+    const result = await pool.query(queryText, [`%${searchTerm}%`, searchTermDigits, limit, offset]);
+    const countResult = await pool.query(countQueryText, [`%${searchTerm}%`, searchTermDigits]);
+    
+    const totalItems = parseInt(countResult.rows[0].count, 10);
+    const totalPages = Math.ceil(totalItems / limit);
+
+    res.json({ 
+      success: true, 
+      clientes: result.rows,
+      pagination: {
+        totalItems,
+        totalPages,
+        currentPage: parseInt(page, 10),
+        itemsPerPage: parseInt(limit, 10)
+      }
+    });
   } catch (error) {
     console.error('Erro ao buscar clientes por contato societário:', error);
     res.status(500).json({ success: false, message: 'Erro interno do servidor.', errorDetail: error.message });
