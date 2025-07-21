@@ -280,42 +280,4 @@ router.delete('/:id', auth, async (req, res) => {
   }
 });
 
-// NOVA ROTA: GET para buscar clientes por nome ou CPF do contato societário
-router.get('/search/clientes-por-contato', auth, async (req, res) => {
-  const { q } = req.query;
-
-  if (!q || String(q).trim() === '') {
-    return res.status(400).json({ success: false, message: 'O termo de busca (q) é obrigatório.' });
-  }
-
-  const searchTerm = String(q).trim();
-  const searchTermDigits = searchTerm.replace(/\D/g, ''); // Para busca por CPF
-
-  try {
-    const queryText = `
-      SELECT DISTINCT ON (c.id)
-        c.*, 
-        cs.nome as matched_contato_nome,
-        cs.cpf as matched_contato_cpf 
-      FROM clientes c
-      JOIN contatos_societarios cs ON c.id = cs.cliente_id
-      WHERE 
-        cs.nome ILIKE $1 OR 
-        cs.cpf = $2
-      ORDER BY c.id, c.nome;
-    `;
-    
-    const result = await pool.query(queryText, [`%${searchTerm}%`, searchTermDigits]);
-
-    if (result.rows.length === 0) {
-      return res.json({ success: true, message: 'Nenhum cliente encontrado para o contato informado.', clientes: [] });
-    }
-    res.json({ success: true, clientes: result.rows });
-
-  } catch (error) {
-    console.error('Erro ao buscar clientes por contato societário:', error);
-    res.status(500).json({ success: false, message: 'Erro interno do servidor.', errorDetail: error.message });
-  }
-});
-
 module.exports = router;
