@@ -58,6 +58,9 @@ app.use('/notificacoes', require('./routes/notificacaoRoutes'));
 // NOVAS ROTAS PARA CHAMADOS T.I.
 app.use('/chamados-ti', require('./routes/Chamado_T.I'));
 
+// NOVAS ROTAS PARA LEADS COMERCIAIS
+app.use('/leads-comerciais', require('./routes/leadcomercial'));
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({ 
