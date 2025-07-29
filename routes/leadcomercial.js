@@ -51,6 +51,9 @@ router.get('/', authMiddleware, canManageLeads, async (req, res) => {
 // POST a new lead
 router.post('/', authMiddleware, canManageLeads, async (req, res) => {
     const { ...leadData } = req.body;
+    if (!leadData.contatoInicial) {
+        leadData.contatoInicial = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    }
     try {
         const fields = Object.keys(leadData);
         const values = Object.values(leadData);
