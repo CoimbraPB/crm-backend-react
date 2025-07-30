@@ -55,7 +55,7 @@ router.post('/', authMiddleware, canManageLeads, async (req, res) => {
         leadData.contatoInicial = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
     }
     try {
-        const allowedFields = ['contatoInicial', 'origem', 'classificacao', 'empresa', 'localidade', 'reuniao', 'ultimaProposta', 'statusProposta', 'followUp', 'etapaFunil', 'pontoFocal', 'telefone', 'email', 'numReunioes', 'tipo', 'formato', 'numPropostas', 'status', 'numFollowUps', 'canal', 'observacoes', 'proximaAcao'];
+        const allowedFields = ['contatoInicial', 'origem', 'classificacao', 'empresa', 'localidade', 'reuniao', 'dataReuniao', 'ultimaProposta', 'statusProposta', 'followUp', 'etapaFunil', 'pontoFocal', 'telefone', 'email', 'numReunioes', 'tipo', 'formato', 'numPropostas', 'status', 'numFollowUps', 'canal', 'observacoes', 'proximaAcao'];
         const fields = Object.keys(leadData).filter(key => allowedFields.includes(key));
         const values = fields.map(key => leadData[key]);
         const placeholders = fields.map((_, i) => `$${i + 1}`).join(', ');
@@ -75,7 +75,7 @@ router.put('/:id', authMiddleware, canManageLeads, async (req, res) => {
     const { id } = req.params;
     const { ...leadData } = req.body;
     try {
-        const allowedFields = ['contatoInicial', 'origem', 'classificacao', 'empresa', 'localidade', 'reuniao', 'ultimaProposta', 'statusProposta', 'followUp', 'etapaFunil', 'pontoFocal', 'telefone', 'email', 'numReunioes', 'tipo', 'formato', 'numPropostas', 'status', 'numFollowUps', 'canal', 'observacoes', 'proximaAcao'];
+        const allowedFields = ['contatoInicial', 'origem', 'classificacao', 'empresa', 'localidade', 'reuniao', 'dataReuniao', 'ultimaProposta', 'statusProposta', 'followUp', 'etapaFunil', 'pontoFocal', 'telefone', 'email', 'numReunioes', 'tipo', 'formato', 'numPropostas', 'status', 'numFollowUps', 'canal', 'observacoes', 'proximaAcao'];
         const fields = Object.keys(leadData).filter(key => allowedFields.includes(key));
         const querySetParts = fields.map((key, index) => `"${key}" = $${index + 1}`);
         const queryValues = fields.map(key => leadData[key]);
