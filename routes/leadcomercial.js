@@ -55,11 +55,11 @@ router.post('/', authMiddleware, canManageLeads, async (req, res) => {
         leadData.contatoInicial = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
     }
     try {
-        const allowedFields = ['contatoInicial', 'origem', 'classificacao', 'empresa', 'localidade', 'reuniao', 'dataReuniao', 'ultimaProposta', 'statusProposta', 'followUp', 'etapaFunil', 'pontoFocal', 'telefone', 'email', 'numReunioes', 'tipo', 'formato', 'numPropostas', 'status', 'numFollowUps', 'canal', 'observacoes', 'proximaAcao'];
+        const allowedFields = ['contatoInicial', 'origem', 'classificacao', 'empresa', 'localidade', 'reuniao', 'dataReuniao', 'ultimaproposta', 'statusProposta', 'followUp', 'etapaFunil', 'pontoFocal', 'telefone', 'email', 'numReunioes', 'tipo', 'formato', 'numPropostas', 'status', 'numFollowUps', 'canal', 'observacoes', 'proximaAcao'];
         const fields = Object.keys(leadData).filter(key => allowedFields.includes(key));
         const values = fields.map(key => leadData[key]);
         const placeholders = fields.map((field, i) => {
-            if (field === 'ultimaProposta') {
+            if (field === 'ultimaproposta') {
                 return `$${i + 1}::VARCHAR`;
             }
             return `$${i + 1}`;
@@ -80,10 +80,10 @@ router.put('/:id', authMiddleware, canManageLeads, async (req, res) => {
     const { id } = req.params;
     const { ...leadData } = req.body;
     try {
-        const allowedFields = ['contatoInicial', 'origem', 'classificacao', 'empresa', 'localidade', 'reuniao', 'dataReuniao', 'ultimaProposta', 'statusProposta', 'followUp', 'etapaFunil', 'pontoFocal', 'telefone', 'email', 'numReunioes', 'tipo', 'formato', 'numPropostas', 'status', 'numFollowUps', 'canal', 'observacoes', 'proximaAcao'];
+        const allowedFields = ['contatoInicial', 'origem', 'classificacao', 'empresa', 'localidade', 'reuniao', 'dataReuniao', 'ultimaproposta', 'statusProposta', 'followUp', 'etapaFunil', 'pontoFocal', 'telefone', 'email', 'numReunioes', 'tipo', 'formato', 'numPropostas', 'status', 'numFollowUps', 'canal', 'observacoes', 'proximaAcao'];
         const fields = Object.keys(leadData).filter(key => allowedFields.includes(key));
         const querySetParts = fields.map((key, index) => {
-            if (key === 'ultimaProposta') {
+            if (key === 'ultimaproposta') {
                 return `"${key}" = $${index + 1}::VARCHAR`;
             }
             return `"${key}" = $${index + 1}`;
