@@ -58,7 +58,12 @@ router.post('/', authMiddleware, canManageLeads, async (req, res) => {
         const allowedFields = ['contatoInicial', 'origem', 'classificacao', 'empresa', 'localidade', 'reuniao', 'dataReuniao', 'ultimaProposta', 'statusProposta', 'followUp', 'etapaFunil', 'pontoFocal', 'telefone', 'email', 'numReunioes', 'tipo', 'formato', 'numPropostas', 'status', 'numFollowUps', 'canal', 'observacoes', 'proximaAcao'];
         const fields = Object.keys(leadData).filter(key => allowedFields.includes(key));
         const values = fields.map(key => leadData[key]);
-        const placeholders = fields.map((_, i) => `$${i + 1}`).join(', ');
+        const placeholders = fields.map((field, i) => {
+            if (field === 'ultimaProposta') {
+                return `$${i + 1}::VARCHAR`;
+            }
+            return `$${i + 1}`;
+        }).join(', ');
 
         const queryText = `INSERT INTO leads_comerciais (${fields.map(f => `"${f}"`).join(', ')}) VALUES (${placeholders}) RETURNING *`;
         
@@ -77,7 +82,12 @@ router.put('/:id', authMiddleware, canManageLeads, async (req, res) => {
     try {
         const allowedFields = ['contatoInicial', 'origem', 'classificacao', 'empresa', 'localidade', 'reuniao', 'dataReuniao', 'ultimaProposta', 'statusProposta', 'followUp', 'etapaFunil', 'pontoFocal', 'telefone', 'email', 'numReunioes', 'tipo', 'formato', 'numPropostas', 'status', 'numFollowUps', 'canal', 'observacoes', 'proximaAcao'];
         const fields = Object.keys(leadData).filter(key => allowedFields.includes(key));
-        const querySetParts = fields.map((key, index) => `"${key}" = $${index + 1}`);
+        const querySetParts = fields.map((key, index) => {
+            if (key === 'ultimaProposta') {
+                return `"${key}" = $${index + 1}::VARCHAR`;
+            }
+            return `"${key}" = $${index + 1}`;
+        });
         const queryValues = fields.map(key => leadData[key]);
         queryValues.push(id);
 
